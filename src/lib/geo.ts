@@ -1,6 +1,6 @@
 import type { LatLng } from "@/mock/data";
 
-function haversineKm(a: LatLng, b: LatLng): number {
+export function haversineKm(a: LatLng, b: LatLng): number {
   const R = 6371;
   const dLat = ((b[0] - a[0]) * Math.PI) / 180;
   const dLng = ((b[1] - a[1]) * Math.PI) / 180;
@@ -47,6 +47,15 @@ export function interpolateAlongRoute(
   }
 
   return { position: route[route.length - 1], bearing: 0 };
+}
+
+/** Total length of a polyline, summing each segment's great-circle distance. */
+export function routeDistanceKm(route: LatLng[]): number {
+  let total = 0;
+  for (let i = 1; i < route.length; i++) {
+    total += haversineKm(route[i - 1], route[i]);
+  }
+  return total;
 }
 
 function bearingBetween(a: LatLng, b: LatLng): number {

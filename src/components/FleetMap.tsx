@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer } from "react-leaflet";
-import type { Trip, LatLng } from "@/mock/data";
+import type { TruckEntry, LatLng } from "@/mock/data";
 import TripLayer from "@/components/TripLayer";
 
 const TICK_MS = 1000;
@@ -29,24 +29,21 @@ const LAYER_TOGGLES: { key: keyof LayerVisibility; label: string; emoji: string 
 ];
 
 interface FleetMapProps {
-  trips: Trip[];
-  driverNameById: Record<string, string>;
-  truckPlateById: Record<string, string>;
-  truckModelById: Record<string, string>;
-  /** If set, only this trip's route/POIs are shown (used on the driver detail page). */
-  focusTripId?: string;
+  trucks: TruckEntry[];
+  /** If set, only this truck's route/POIs are shown (used on the driver detail page). */
+  focusTruckId?: string;
 }
 
-export default function FleetMap({
-  trips,
-  driverNameById,
-  truckPlateById,
-  truckModelById,
-  focusTripId,
-}: FleetMapProps) {
-  const visibleTrips = useMemo(
-    () => (focusTripId ? trips.filter((t) => t.id === focusTripId) : trips),
-    [trips, focusTripId],
+export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
+  // Only trucks that have actually been located (route populated by
+  // enrichTruck) AND are toggled visible get drawn — a truck with just a
+  // driver name and no source/destination yet has nothing to show.
+  const visibleTrucks = useMemo(
+    () =>
+      trucks.filter(
+        (t) => t.showOnMap && t.route && t.route.length >= 2 && (!focusTruckId || t.id === focusTruckId),
+      ),
+    [trucks, focusTruckId],
   );
 
   const [elapsed, setElapsed] = useState(0);
@@ -67,7 +64,7 @@ export default function FleetMap({
     return () => clearInterval(interval);
   }, []);
 
-  const center: LatLng = visibleTrips[0]?.route[0] ?? [47.0, 20.0];
+  const center: LatLng = visibleTrucks[0]?.route?.[0] ?? [47.0, 20.0];
 
   return (
     // react-leaflet's MapContainer only applies `className` once, at map
@@ -112,7 +109,7 @@ export default function FleetMap({
 
       <MapContainer
         center={center}
-        zoom={focusTripId ? 6 : 5}
+        zoom={focusTruckId ? 6 : 5}
         minZoom={4}
         maxBounds={EUROPE_BOUNDS}
         maxBoundsViscosity={1.0}
@@ -123,13 +120,10 @@ export default function FleetMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {visibleTrips.map((trip) => (
+        {visibleTrucks.map((truck) => (
           <TripLayer
-            key={trip.id}
-            trip={trip}
-            driverName={driverNameById[trip.driverId]}
-            truckPlate={truckPlateById[trip.driverId]}
-            truckModel={truckModelById[trip.driverId]}
+            key={truck.id}
+            truck={truck}
             elapsed={elapsed}
             showFuel={layers.fuel}
             showService={layers.service}

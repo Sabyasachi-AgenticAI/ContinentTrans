@@ -2,17 +2,14 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { drivers, trips } from "@/mock/data";
-import DriverList from "@/components/DriverList";
+import { useFleet } from "@/lib/fleetStore";
+import FleetEditor from "@/components/FleetEditor";
 
 const FleetMap = dynamic(() => import("@/components/FleetMap"), { ssr: false });
 
-const driverById = Object.fromEntries(drivers.map((d) => [d.id, d]));
-const driverNameById = Object.fromEntries(drivers.map((d) => [d.id, d.name]));
-const truckPlateById = Object.fromEntries(drivers.map((d) => [d.id, d.truckPlate]));
-const truckModelById = Object.fromEntries(drivers.map((d) => [d.id, d.truckModel]));
-
 export default function Dashboard() {
+  const { trucks } = useFleet();
+
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-void">
       {/* Header bg is pure #000 — the exact black the logo file's own canvas
@@ -45,22 +42,17 @@ export default function Dashboard() {
       {/* Map gets a fixed, dedicated viewport region — not something the page
           scrolls "past" — so its own scroll-to-zoom never fights page scroll. */}
       <div className="flex-1 min-h-0">
-        <FleetMap
-          trips={trips}
-          driverNameById={driverNameById}
-          truckPlateById={truckPlateById}
-          truckModelById={truckModelById}
-        />
+        <FleetMap trucks={trucks} />
       </div>
 
-      <section className="shrink-0 h-48 overflow-y-auto border-t border-hairline bg-surface">
+      <section className="shrink-0 h-80 overflow-y-auto border-t border-hairline bg-surface">
         <div className="flex items-center gap-2 px-4 pt-4 pb-1">
           <span className="h-3.5 w-0.5 bg-gradient-to-b from-brand-red to-brand-gold rounded-full" />
           <h2 className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink">
             Fleet status
           </h2>
         </div>
-        <DriverList trips={trips} driverById={driverById} />
+        <FleetEditor />
       </section>
     </div>
   );

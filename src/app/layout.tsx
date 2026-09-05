@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Oswald, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
+import { FleetProvider } from "@/lib/fleetStore";
 
 // Oswald: condensed gothic in the lineage of European highway signage —
 // the actual typographic world these trucks drive through.
@@ -36,7 +37,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${oswald.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="h-full flex flex-col overflow-hidden font-sans">{children}</body>
+      <body className="h-full flex flex-col overflow-hidden font-sans">
+        <FleetProvider>{children}</FleetProvider>
+      </body>
     </html>
   );
 }
