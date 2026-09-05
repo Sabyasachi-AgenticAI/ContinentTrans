@@ -109,6 +109,36 @@ function TruckRow({ truck }: { truck: TruckEntry }) {
         </button>
       </div>
 
+      {/* Per-truck, not fleet-wide — each truck's WhatsApp alerting is its
+          own setting, deliberately, after an earlier version's single
+          fleet-wide switch turned out to be the wrong shape for this. */}
+      <div className="flex items-center gap-3 pt-1 border-t border-hairline">
+        <label className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+          <input
+            type="checkbox"
+            checked={truck.whatsappAlertsEnabled}
+            onChange={(e) => patch({ whatsappAlertsEnabled: e.target.checked })}
+            className="accent-[var(--brand-gold)]"
+          />
+          📲 WhatsApp alerts
+          <span className={truck.whatsappAlertsEnabled ? "text-brand-gold" : "text-ink-muted"}>
+            {truck.whatsappAlertsEnabled ? "ON" : "OFF"}
+          </span>
+        </label>
+        <label className="flex items-center gap-1 text-[11px] text-ink-muted">
+          radius
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={truck.fuelProximityKm}
+            onChange={(e) => patch({ fuelProximityKm: Number(e.target.value) || 1 })}
+            className="w-12 bg-surface border border-hairline rounded px-1 py-0.5 text-ink"
+          />
+          km
+        </label>
+      </div>
+
       {truck.enrichStatus === "error" && (
         <p className="text-[11px] text-brand-red">{truck.enrichError}</p>
       )}

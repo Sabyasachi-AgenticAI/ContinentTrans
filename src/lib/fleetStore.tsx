@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
-import { DEFAULT_TRUCKS, type TruckEntry } from "@/mock/data";
+import { DEFAULT_TRUCKS, DEFAULT_FUEL_PROXIMITY_KM, type TruckEntry } from "@/mock/data";
 
 // Bumped to v2 when seed trucks stopped shipping pre-located — anyone with
 // v1 cached (already-enriched seed data) gets the new clean defaults
@@ -28,6 +28,10 @@ function blankTruck(): TruckEntry {
     notes: "",
     status: "idle",
     showOnMap: true,
+    // Per-truck, defaults OFF — no fleet-wide switch. See TruckEntry's
+    // whatsappAlertsEnabled doc comment for why.
+    whatsappAlertsEnabled: false,
+    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
     startProgress: 0,
     fuelStops: [],
     serviceStops: [],

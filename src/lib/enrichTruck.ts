@@ -19,6 +19,7 @@ interface OverpassResult {
   lat: number;
   lng: number;
   phone?: string;
+  address?: string;
 }
 
 async function fetchOverpass(kind: "maintenance" | "parking", lat: number, lng: number): Promise<OverpassResult[]> {
@@ -95,6 +96,7 @@ export async function enrichTruck(
       name: r.name,
       type: "garage",
       phone: r.phone,
+      address: r.address,
       position: [r.lat, r.lng],
       source: "osm",
     }));
@@ -105,6 +107,7 @@ export async function enrichTruck(
     .map((r) => ({
       id: `park-osm-${r.id}`,
       name: r.name,
+      address: r.address,
       position: [r.lat, r.lng],
       source: "osm",
     }));

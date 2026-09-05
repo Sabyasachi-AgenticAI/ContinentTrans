@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { TruckEntry } from "@/mock/data";
+import { DEFAULT_FUEL_PROXIMITY_KM, type TruckEntry } from "@/mock/data";
 
 // Case/spacing-insensitive header matching, with common synonyms, so the
 // existing seed-data/continent_trans_sample.xlsx (driver_name, phone,
@@ -53,6 +53,8 @@ function emptyTruck(): TruckEntry {
     notes: "",
     status: "idle",
     showOnMap: true,
+    whatsappAlertsEnabled: false,
+    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
     startProgress: 0,
     fuelStops: [],
     serviceStops: [],

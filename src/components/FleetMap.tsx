@@ -56,6 +56,12 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
   const toggleLayer = (key: keyof LayerVisibility) =>
     setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  const [toast, setToast] = useState<{ message: string; ok: boolean } | null>(null);
+  const handleWhatsAppEvent = (message: string, ok: boolean) => {
+    setToast({ message, ok });
+    setTimeout(() => setToast(null), 6000);
+  };
+
   useEffect(() => {
     const start = Date.now();
     const interval = setInterval(() => {
@@ -128,9 +134,22 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
             showFuel={layers.fuel}
             showService={layers.service}
             showParking={layers.parking}
+            onWhatsAppEvent={handleWhatsAppEvent}
           />
         ))}
       </MapContainer>
+
+      {toast && (
+        <div
+          className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] rounded-md border px-3 py-2 text-xs font-mono shadow-lg ${
+            toast.ok
+              ? "border-brand-gold/50 bg-surface-raised text-ink"
+              : "border-brand-red/50 bg-surface-raised text-brand-red"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

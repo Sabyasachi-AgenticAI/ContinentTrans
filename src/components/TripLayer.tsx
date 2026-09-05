@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { Marker, Polyline, Popup, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import type { TruckEntry, FuelStop, LatLng } from "@/mock/data";
-import { interpolateAlongRoute } from "@/lib/geo";
+import { interpolateAlongRoute, haversineKm } from "@/lib/geo";
 import { fetchTruckRoute, type RouteSource } from "@/lib/routing";
 import { fetchNearbyFuelPrices, type FuelPriceStation } from "@/lib/fuelPrices";
+import { useFleet } from "@/lib/fleetStore";
+import { hasAlerted, markAlerted } from "@/lib/whatsappAlertLog";
 
 const DEMO_LOOP_SECONDS = 90;
 
@@ -125,9 +127,18 @@ interface TripLayerProps {
   showFuel: boolean;
   showService: boolean;
   showParking: boolean;
+  /** Called once per fuel-stop-proximity event, for the toast in FleetMap. */
+  onWhatsAppEvent?: (message: string, ok: boolean) => void;
 }
 
-export default function TripLayer({ truck, elapsed, showFuel, showService, showParking }: TripLayerProps) {
+export default function TripLayer({
+  truck,
+  elapsed,
+  showFuel,
+  showService,
+  showParking,
+  onWhatsAppEvent,
+}: TripLayerProps) {
   // Falls back to the truck's stored route endpoints until/unless a real
   // route is fetched — ORS's truck-aware driving-hgv profile first, OSRM as
   // a fallback. Fetched once per truck on mount — same "once per route"
@@ -151,16 +162,53 @@ export default function TripLayer({ truck, elapsed, showFuel, showService, showP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [truck.id]);
 
-  if (!truck.route) return null;
-
-  const route = roadRoute ?? truck.route;
+  const route = roadRoute ?? truck.route ?? [];
   const color = STATUS_COLOR[truck.status];
 
   const loopT = (truck.startProgress + elapsed / DEMO_LOOP_SECONDS) % 1;
   const { position } =
-    truck.status === "in_transit"
-      ? interpolateAlongRoute(route, loopT)
-      : interpolateAlongRoute(route, truck.status === "idle" ? 0 : truck.startProgress);
+    route.length === 0
+      ? { position: [0, 0] as LatLng, bearing: 0 }
+      : truck.status === "in_transit"
+        ? interpolateAlongRoute(route, loopT)
+        : interpolateAlongRoute(route, truck.status === "idle" ? 0 : truck.startProgress);
+
+  // Proximity check against the truck's real phone number, on the demo's
+  // simulated position — no live GPS feed exists yet, so this proves the
+  // alert mechanism against the same animated movement already on the map,
+  // not a real driver's real location. Gated on THIS TRUCK's own switch —
+  // deliberately no fleet-wide master switch; each truck's alerting is
+  // entirely its own setting — AND this specific stop being marked
+  // "notify" (not every fuel stop within range should message the driver).
+  useEffect(() => {
+    if (!truck.whatsappAlertsEnabled) return;
+    if (!truck.phone || truck.status !== "in_transit" || route.length === 0) return;
+    for (const stop of truck.fuelStops) {
+      if (!stop.notify) continue;
+      if (hasAlerted(truck.id, stop.id)) continue;
+      if (haversineKm(position, stop.position) > truck.fuelProximityKm) continue;
+
+      markAlerted(truck.id, stop.id);
+      fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: truck.phone }),
+      })
+        .then((res) => res.ok)
+        .catch(() => false)
+        .then((ok) => {
+          onWhatsAppEvent?.(
+            ok
+              ? `📲 WhatsApp sent to ${truck.driverName} — approaching ${stop.name}`
+              : `⚠️ WhatsApp send failed for ${truck.driverName} (near ${stop.name})`,
+            ok,
+          );
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsed, truck.whatsappAlertsEnabled, truck.fuelProximityKm]);
+
+  if (!truck.route) return null;
 
   return (
     <>
@@ -209,11 +257,16 @@ export default function TripLayer({ truck, elapsed, showFuel, showService, showP
         </Popup>
       </Marker>
 
-      {showFuel && truck.fuelStops.map((f) => <FuelStopMarker key={f.id} stop={f} />)}
+      {showFuel &&
+        truck.fuelStops.map((f) => <FuelStopMarker key={f.id} stop={f} truckId={truck.id} />)}
 
       {showService &&
         truck.serviceStops.map((s) => (
           <Marker key={s.id} position={s.position} icon={s.type === "garage" ? GARAGE_ICON : TOWING_ICON}>
+            <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+              <span className="font-semibold">{s.name}</span>
+              {s.address ? ` — ${s.address}` : ""}
+            </Tooltip>
             <Popup>
               <div className="text-sm font-sans">
                 <p className="font-display font-semibold">{s.name}</p>
@@ -236,6 +289,10 @@ export default function TripLayer({ truck, elapsed, showFuel, showService, showP
       {showParking &&
         truck.parkingStops.map((p) => (
           <Marker key={p.id} position={p.position} icon={parkingIcon(p.available, p.capacityTotal)}>
+            <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+              <span className="font-semibold">{p.name}</span>
+              {p.address ? ` — ${p.address}` : ""}
+            </Tooltip>
             <Popup>
               <div className="text-sm font-sans">
                 <p className="font-display font-semibold">{p.name}</p>
@@ -277,10 +334,20 @@ const FUEL_TYPE_LABEL: Record<string, string> = {
 // Fetches real prices only when the popup is actually opened, not on mount —
 // quota-conscious against nakordoni.eu's 1,000 calls/day Explorer plan
 // rather than spending it on every marker on every page load.
-function FuelStopMarker({ stop }: { stop: FuelStop }) {
+function FuelStopMarker({ stop, truckId }: { stop: FuelStop; truckId: string }) {
+  const { trucks, updateTruck } = useFleet();
+  const parentTruck = trucks.find((t) => t.id === truckId);
   const [stations, setStations] = useState<FuelPriceStation[] | null>(null);
   const [attribution, setAttribution] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+
+  const toggleNotify = () => {
+    const truck = trucks.find((t) => t.id === truckId);
+    if (!truck) return;
+    updateTruck(truckId, {
+      fuelStops: truck.fuelStops.map((s) => (s.id === stop.id ? { ...s, notify: !s.notify } : s)),
+    });
+  };
 
   const loadPrices = () => {
     if (state !== "idle") return;
@@ -296,8 +363,26 @@ function FuelStopMarker({ stop }: { stop: FuelStop }) {
     });
   };
 
+  const nearest = stations && stations.length > 0 ? stations[0] : null;
+
   return (
-    <Marker position={stop.position} icon={FUEL_ICON} eventHandlers={{ popupopen: loadPrices }}>
+    <Marker
+      position={stop.position}
+      icon={FUEL_ICON}
+      eventHandlers={{ popupopen: loadPrices, mouseover: loadPrices }}
+    >
+      <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+        {nearest ? (
+          <>
+            <span className="font-semibold">{nearest.name}</span>
+            {nearest.address ? ` — ${nearest.address}` : ""}
+          </>
+        ) : state === "loading" ? (
+          "Finding nearest real station…"
+        ) : (
+          stop.name
+        )}
+      </Tooltip>
       <Popup>
         <div className="text-sm font-sans min-w-[180px]">
           <p className="font-display font-semibold">{stop.name}</p>
@@ -335,6 +420,18 @@ function FuelStopMarker({ stop }: { stop: FuelStop }) {
                   {attribution}
                 </a>
               </>
+            )}
+          </div>
+
+          <div className="mt-2 border-t border-hairline pt-2">
+            <label className="flex items-center gap-1.5 text-xs">
+              <input type="checkbox" checked={!!stop.notify} onChange={toggleNotify} />
+              🔔 Notify driver via WhatsApp here
+            </label>
+            {stop.notify && parentTruck && !parentTruck.whatsappAlertsEnabled && (
+              <p className="text-[10px] text-ink-muted mt-1">
+                This truck&apos;s WhatsApp alerts are off — turn it on in Fleet Status to actually send.
+              </p>
             )}
           </div>
         </div>

@@ -18,6 +18,13 @@ interface OverpassElement {
   tags?: Record<string, string>;
 }
 
+function formatAddress(tags: Record<string, string> = {}): string | undefined {
+  const street = [tags["addr:street"], tags["addr:housenumber"]].filter(Boolean).join(" ");
+  const city = [tags["addr:postcode"], tags["addr:city"]].filter(Boolean).join(" ");
+  const parts = [street, city].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : undefined;
+}
+
 function buildQuery(kind: string, lat: string, lng: string): string {
   if (kind === "parking") {
     // hgv=yes/designated is the OSM tag for truck-permitted parking;
@@ -84,6 +91,7 @@ export async function GET(request: Request) {
         lat,
         lng,
         phone: el.tags?.phone || el.tags?.["contact:phone"] || undefined,
+        address: formatAddress(el.tags),
       };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);

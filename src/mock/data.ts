@@ -5,6 +5,10 @@ export interface FuelStop {
   name: string;
   brand: string;
   position: LatLng;
+  /** Fleet-manager opt-in — only stops explicitly marked trigger a WhatsApp
+   * nudge on proximity. Not every fuel stop within range should message the
+   * driver; the manager picks which one(s) actually should. */
+  notify?: boolean;
 }
 
 export interface ServicePoint {
@@ -12,6 +16,7 @@ export interface ServicePoint {
   name: string;
   type: "towing" | "garage";
   phone?: string;
+  address?: string;
   position: LatLng;
   /** Set for OSM-sourced (Overpass) results — real but community-maintained data. */
   source?: "osm";
@@ -28,6 +33,7 @@ export interface ParkingSpot {
   position: LatLng;
   capacityTotal?: number;
   available?: number;
+  address?: string;
   source?: "osm";
 }
 
@@ -40,6 +46,9 @@ export interface TripAlert {
 
 export type TruckStatus = "in_transit" | "gps_silent" | "idle";
 export type EnrichStatus = "idle" | "loading" | "done" | "error";
+
+/** Default radius (km) for a truck's WhatsApp fuel-stop proximity alert. */
+export const DEFAULT_FUEL_PROXIMITY_KM = 15;
 
 /**
  * One row = one truck, combining what used to be split across separate
@@ -57,6 +66,13 @@ export interface TruckEntry {
   notes: string;
   status: TruckStatus;
   showOnMap: boolean;
+  /** Per-truck, fleet-manager controlled — defaults OFF. No global switch:
+   * each truck's alerting is entirely its own setting, deliberately, after
+   * an early version's single fleet-wide switch turned out to be the wrong
+   * shape for this. */
+  whatsappAlertsEnabled: boolean;
+  /** How close (km) this truck must be to a notify-marked fuel stop before an alert fires. */
+  fuelProximityKm: number;
   alert?: TripAlert;
   /** 0-1 starting position along the route, seeds the live-movement simulation. */
   startProgress: number;
@@ -100,6 +116,8 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "in_transit",
     showOnMap: true,
+    whatsappAlertsEnabled: false,
+    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
     startProgress: 0.12,
     revenueEur: 2248.25,
     fuelStops: [],
@@ -118,6 +136,8 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "in_transit",
     showOnMap: true,
+    whatsappAlertsEnabled: false,
+    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
     startProgress: 0.35,
     revenueEur: 2345.51,
     fuelStops: [],
@@ -136,6 +156,8 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "gps_silent",
     showOnMap: true,
+    whatsappAlertsEnabled: false,
+    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
     startProgress: 0.5,
     revenueEur: 4000.0,
     fuelStops: [],
@@ -154,6 +176,8 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "idle",
     showOnMap: true,
+    whatsappAlertsEnabled: false,
+    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
     startProgress: 0.02,
     revenueEur: 1991.0,
     fuelStops: [],
@@ -172,6 +196,8 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "in_transit",
     showOnMap: true,
+    whatsappAlertsEnabled: false,
+    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
     startProgress: 0.68,
     revenueEur: 5724.2,
     fuelStops: [],
