@@ -1,0 +1,293 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Marker, Polyline, Popup, Tooltip } from "react-leaflet";
+import L from "leaflet";
+import type { Trip, FuelStop } from "@/mock/data";
+import { interpolateAlongRoute } from "@/lib/geo";
+import { fetchTruckRoute, type RouteSource } from "@/lib/routing";
+import { fetchNearbyFuelPrices, type FuelPriceStation } from "@/lib/fuelPrices";
+
+const DEMO_LOOP_SECONDS = 90;
+
+// Same semantics as the instrument-cluster dots in DriverList: gold =
+// running normally, red = needs attention, grey = parked/idle.
+const STATUS_COLOR: Record<Trip["status"], string> = {
+  in_transit: "#c9a24b",
+  gps_silent: "#c1272d",
+  idle: "#6b7280",
+};
+
+// Manufacturer badges use short text codes + a brand-adjacent color, not the
+// actual Scania/MAN/Mercedes-Benz trademarked logos — those are protected
+// marks and not something to embed without rights to the artwork.
+const BRAND_BADGE: Record<string, { code: string; color: string }> = {
+  Scania: { code: "SCA", color: "#0f2d52" },
+  "Mercedes Benz": { code: "MB", color: "#1a1a1a" },
+  MAN: { code: "MAN", color: "#d20a11" },
+};
+
+function brandBadge(truckModel: string) {
+  const brand = Object.keys(BRAND_BADGE).find((b) => truckModel.startsWith(b));
+  return brand ? BRAND_BADGE[brand] : null;
+}
+
+// A truck emoji badge, not a rotating arrow — easier to spot at a glance on
+// a crowded map than an abstract triangle, and doesn't need directional
+// artwork we don't have. The small corner chip identifies the manufacturer.
+function truckIcon(color: string, truckModel: string) {
+  const badge = brandBadge(truckModel);
+  const badgeHtml = badge
+    ? `<span style="
+        position:absolute; bottom:-3px; right:-5px;
+        min-width:16px; height:14px; padding:0 2px;
+        border-radius:7px; background:${badge.color}; color:white;
+        font-size:7px; font-weight:700; letter-spacing:.2px;
+        display:flex; align-items:center; justify-content:center;
+        border:1.5px solid white; box-shadow:0 1px 2px rgba(0,0,0,.4);
+      ">${badge.code}</span>`
+    : "";
+
+  return L.divIcon({
+    className: "",
+    html: `<div style="position:relative; width:28px; height:28px;">
+      <div style="
+          width:28px; height:28px;
+          display:flex; align-items:center; justify-content:center;
+          background:${color}; border:2px solid #f2f0ea; border-radius:50%;
+          box-shadow:0 1px 6px rgba(0,0,0,.6);
+          font-size:15px;
+        ">🚛</div>
+      ${badgeHtml}
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+function poiIcon(emoji: string, bg: string) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="
+        width:20px;height:20px;border-radius:50%;
+        background:${bg}; border:1px solid rgba(242,240,234,.35);
+        display:flex;align-items:center;justify-content:center;
+        font-size:11px; box-shadow:0 1px 4px rgba(0,0,0,.6);
+      ">${emoji}</div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+}
+
+const FUEL_ICON = poiIcon("⛽", "#facc15");
+const GARAGE_ICON = poiIcon("🔧", "#38bdf8");
+const TOWING_ICON = poiIcon("🚨", "#fb923c");
+
+// Color reflects occupancy so a full lot is obvious before opening the popup.
+function parkingIcon(available: number, capacityTotal: number) {
+  const ratio = capacityTotal > 0 ? available / capacityTotal : 0;
+  const bg = available === 0 ? "#dc2626" : ratio < 0.25 ? "#f59e0b" : "#16a34a";
+  return poiIcon("🅿️", bg);
+}
+
+interface TripLayerProps {
+  trip: Trip;
+  driverName: string;
+  truckPlate: string;
+  truckModel: string;
+  elapsed: number;
+  showFuel: boolean;
+  showService: boolean;
+  showParking: boolean;
+}
+
+export default function TripLayer({
+  trip,
+  driverName,
+  truckPlate,
+  truckModel,
+  elapsed,
+  showFuel,
+  showService,
+  showParking,
+}: TripLayerProps) {
+  // Falls back to the hand-authored mock polyline (trip.route) until/unless
+  // a real route is fetched — ORS's truck-aware driving-hgv profile first,
+  // OSRM as a fallback. Fetched once per trip on mount — same "once per
+  // route" volume reasoning as geocoding.
+  const [roadRoute, setRoadRoute] = useState<Trip["route"] | null>(null);
+  const [routeSource, setRouteSource] = useState<RouteSource>("mock");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchTruckRoute(trip.route).then((result) => {
+      if (cancelled || !result) return;
+      setRoadRoute(result.route);
+      setRouteSource(result.source);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip.id]);
+
+  const route = roadRoute ?? trip.route;
+  const color = STATUS_COLOR[trip.status];
+
+  const loopT = (trip.startProgress + elapsed / DEMO_LOOP_SECONDS) % 1;
+  const { position } =
+    trip.status === "in_transit"
+      ? interpolateAlongRoute(route, loopT)
+      : interpolateAlongRoute(route, trip.status === "idle" ? 0 : trip.startProgress);
+
+  return (
+    <>
+      <Polyline positions={route} pathOptions={{ color, weight: 3, opacity: 0.6 }} />
+
+      <Marker position={position} icon={truckIcon(color, truckModel)}>
+        <Tooltip className="plate-tooltip" direction="top" offset={[0, -14]} permanent opacity={1}>
+          {truckPlate}
+        </Tooltip>
+        <Popup>
+          <div className="text-sm font-sans">
+            <p className="font-display font-semibold uppercase tracking-wide">
+              {driverName} · <span className="font-mono">{truckPlate}</span>
+            </p>
+            <p className="text-xs text-ink-muted">{truckModel}</p>
+            <p className="mt-1">
+              {trip.sourceLabel} → {trip.destinationLabel}
+            </p>
+            <p className="capitalize text-xs mt-1">status: {trip.status.replace("_", " ")}</p>
+            <p className="text-[10px] text-ink-muted mt-1">
+              route:{" "}
+              {routeSource === "ors-hgv"
+                ? "truck-aware route (OpenRouteService HGV)"
+                : routeSource === "osrm"
+                  ? "road route (OSRM, car profile)"
+                  : "mock waypoints"}
+            </p>
+            {trip.alert && <p className="text-xs mt-1 text-brand-red">{trip.alert.message}</p>}
+          </div>
+        </Popup>
+      </Marker>
+
+      {showFuel && trip.fuelStops.map((f) => <FuelStopMarker key={f.id} stop={f} />)}
+
+      {showService && trip.serviceStops.map((s) => (
+        <Marker key={s.id} position={s.position} icon={s.type === "garage" ? GARAGE_ICON : TOWING_ICON}>
+          <Popup>
+            <div className="text-sm font-sans">
+              <p className="font-display font-semibold">{s.name}</p>
+              <p className="text-xs capitalize text-ink-muted">{s.type}</p>
+              <a className="text-xs text-brand-gold font-mono" href={`tel:${s.phone}`}>
+                {s.phone}
+              </a>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+
+      {showParking && trip.parkingStops.map((p) => (
+        <Marker key={p.id} position={p.position} icon={parkingIcon(p.available, p.capacityTotal)}>
+          <Popup>
+            <div className="text-sm font-sans">
+              <p className="font-display font-semibold">{p.name}</p>
+              <p className="text-xs font-mono">
+                {p.available === 0 ? (
+                  <span className="text-brand-red font-medium">Full</span>
+                ) : (
+                  <span>
+                    {p.available} / {p.capacityTotal} spots free
+                  </span>
+                )}
+              </p>
+              <p className="text-[10px] text-ink-muted mt-1 font-sans">
+                mock data — real TRAVIS availability pending API credentials
+              </p>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  );
+}
+
+const FUEL_TYPE_LABEL: Record<string, string> = {
+  diesel: "Diesel",
+  e5: "Petrol E5",
+  e10: "Petrol E10",
+  petrol: "Petrol 95",
+  petrol98: "Petrol 98",
+  lpg: "LPG",
+};
+
+// Fetches real prices only when the popup is actually opened, not on mount —
+// quota-conscious against nakordoni.eu's 1,000 calls/day Explorer plan
+// rather than spending it on every marker on every page load.
+function FuelStopMarker({ stop }: { stop: FuelStop }) {
+  const [stations, setStations] = useState<FuelPriceStation[] | null>(null);
+  const [attribution, setAttribution] = useState<string | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+
+  const loadPrices = () => {
+    if (state !== "idle") return;
+    setState("loading");
+    fetchNearbyFuelPrices(stop.position[0], stop.position[1]).then((result) => {
+      if (!result) {
+        setState("error");
+        return;
+      }
+      setStations(result.stations);
+      setAttribution(result.attribution);
+      setState("done");
+    });
+  };
+
+  return (
+    <Marker position={stop.position} icon={FUEL_ICON} eventHandlers={{ popupopen: loadPrices }}>
+      <Popup>
+        <div className="text-sm font-sans min-w-[180px]">
+          <p className="font-display font-semibold">{stop.name}</p>
+          <p className="text-xs text-ink-muted">{stop.brand} fuel station</p>
+
+          <div className="mt-2 border-t border-hairline pt-2">
+            {state === "loading" && <p className="text-xs text-ink-muted">Checking live prices…</p>}
+            {state === "error" && (
+              <p className="text-xs text-ink-muted">Live price lookup unavailable right now.</p>
+            )}
+            {state === "done" && stations && stations.length === 0 && (
+              <p className="text-xs text-ink-muted">No reporting station within 30 km.</p>
+            )}
+            {state === "done" && stations && stations.length > 0 && (
+              <>
+                <p className="text-[11px] text-ink-muted mb-1">
+                  Nearest real station: {stations[0].name} ({stations[0].distance_km} km)
+                </p>
+                <ul className="flex flex-col gap-0.5 font-mono text-xs">
+                  {stations.map((s, i) => (
+                    <li key={i} className="flex justify-between gap-3">
+                      <span className="text-ink-muted">{FUEL_TYPE_LABEL[s.fuel_type] ?? s.fuel_type}</span>
+                      <span>
+                        {s.price.toFixed(3)} {s.currency}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href="https://nakordoni.eu"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] text-brand-gold mt-1.5 inline-block"
+                >
+                  {attribution}
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+      </Popup>
+    </Marker>
+  );
+}

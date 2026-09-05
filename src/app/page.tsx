@@ -1,69 +1,67 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import dynamic from "next/dynamic";
+import Image from "next/image";
+import { drivers, trips } from "@/mock/data";
+import DriverList from "@/components/DriverList";
+
+const FleetMap = dynamic(() => import("@/components/FleetMap"), { ssr: false });
+
+const driverById = Object.fromEntries(drivers.map((d) => [d.id, d]));
+const driverNameById = Object.fromEntries(drivers.map((d) => [d.id, d.name]));
+const truckPlateById = Object.fromEntries(drivers.map((d) => [d.id, d.truckPlate]));
+const truckModelById = Object.fromEntries(drivers.map((d) => [d.id, d.truckModel]));
+
+export default function Dashboard() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    <div className="flex flex-col flex-1 min-h-0 bg-void">
+      {/* Header bg is pure #000 — the exact black the logo file's own canvas
+          uses — so the image blends with zero visible edge, rather than the
+          slightly-off bg-void tone it had before. */}
+      <header className="relative flex flex-col items-center justify-center bg-black py-3 sm:py-4 shrink-0">
+        <div className="absolute left-4 top-3 sm:left-6 sm:top-4 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-brand-gold" />
+          <span className="font-display text-[11px] font-medium uppercase tracking-[0.2em] text-ink-muted">
+            Live
+          </span>
+        </div>
+        {/* The source file is a 400x400 square canvas with a lot of black
+            padding around a compact text band — scaling the whole square up
+            just grows that padding, and cropping it wider than ~400px wide
+            upscales real pixels into visible blur (a hard limit of this
+            being a low-res source file — a higher-res original would let
+            this go bigger without softening). Capped near native width. */}
         <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="/continent-trans-logo.jpg"
+          alt="Continent Trans"
+          width={400}
+          height={400}
+          className="h-24 w-full max-w-md sm:h-28 sm:max-w-lg object-cover"
           priority
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-brand-gold/70 to-transparent" />
+      </header>
+
+      {/* Map gets a fixed, dedicated viewport region — not something the page
+          scrolls "past" — so its own scroll-to-zoom never fights page scroll. */}
+      <div className="flex-1 min-h-0">
+        <FleetMap
+          trips={trips}
+          driverNameById={driverNameById}
+          truckPlateById={truckPlateById}
+          truckModelById={truckModelById}
+        />
+      </div>
+
+      <section className="shrink-0 h-48 overflow-y-auto border-t border-hairline bg-surface">
+        <div className="flex items-center gap-2 px-4 pt-4 pb-1">
+          <span className="h-3.5 w-0.5 bg-gradient-to-b from-brand-red to-brand-gold rounded-full" />
+          <h2 className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink">
+            Fleet status
+          </h2>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        <DriverList trips={trips} driverById={driverById} />
+      </section>
     </div>
   );
 }

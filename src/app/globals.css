@@ -1,26 +1,97 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Night-highway ops console — pulled from the Continent Trans mark
+     (black ground, red + brass-gold) rather than a generic dark theme. */
+  --void: #0b0c0e;
+  --surface: #16181b;
+  --surface-raised: #1c1f23;
+  --hairline: #292c31;
+  --brand-red: #c1272d;
+  --brand-gold: #c9a24b;
+  --ink: #f2f0ea;
+  --ink-muted: #9a9da4;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-void: var(--void);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
+  --color-brand-red: var(--brand-red);
+  --color-brand-gold: var(--brand-gold);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --font-display: var(--font-oswald);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--void);
+  color: var(--ink);
+}
+
+/* Visible keyboard focus everywhere, in the brand accent. */
+:focus-visible {
+  outline: 2px solid var(--brand-gold);
+  outline-offset: 2px;
+}
+
+/* The one animation on the page: a warning-light pulse, reserved for
+   trucks that actually need attention. Off entirely under reduced motion. */
+@keyframes led-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(193 39 45 / 0.55);
+  }
+  50% {
+    opacity: 0.75;
+    box-shadow: 0 0 0 5px rgb(193 39 45 / 0);
+  }
+}
+
+.led-pulse {
+  animation: led-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .led-pulse {
+    animation: none;
+  }
+}
+
+/* Leaflet ships its own white popup/tooltip chrome inline — override it to
+   match the console theme instead of leaving light-mode boxes on a dark map. */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.5);
+}
+.leaflet-popup-content a {
+  color: var(--brand-gold);
+}
+.leaflet-popup-close-button {
+  color: var(--ink-muted) !important;
+}
+.plate-tooltip.leaflet-tooltip {
+  background: var(--surface-raised);
+  color: var(--ink);
+  border: 1px solid var(--brand-gold);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
+}
+.plate-tooltip.leaflet-tooltip::before {
+  border-top-color: var(--brand-gold);
+}
+
+/* "Black" map theme: a CSS filter on the standard light OSM tiles rather
+   than a separate dark tile provider (one we tried started requiring an
+   API key mid-session — not something to build a "theme option" around). */
+.theme-black .leaflet-tile-pane {
+  filter: grayscale(1) brightness(0.4) contrast(1.25);
 }
