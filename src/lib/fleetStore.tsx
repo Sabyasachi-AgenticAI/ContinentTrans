@@ -3,7 +3,10 @@
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
 import { DEFAULT_TRUCKS, type TruckEntry } from "@/mock/data";
 
-const STORAGE_KEY = "trak-fleet-v1";
+// Bumped to v2 when seed trucks stopped shipping pre-located — anyone with
+// v1 cached (already-enriched seed data) gets the new clean defaults
+// instead of stale state under the old key.
+const STORAGE_KEY = "trak-fleet-v2";
 
 type Action =
   | { type: "SET_ALL"; trucks: TruckEntry[] }

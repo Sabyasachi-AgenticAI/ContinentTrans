@@ -115,11 +115,7 @@ function TruckRow({ truck }: { truck: TruckEntry }) {
       {truck.enrichStatus === "done" && (
         <p className="text-[11px] font-mono text-ink-muted">
           {truck.distanceKm} km
-          {truck.revenueEur !== undefined
-            ? ` · €${truck.revenueEur.toFixed(2)} revenue`
-            : truck.estimatedFuelCostEur !== undefined
-              ? ` · ~€${truck.estimatedFuelCostEur} est. fuel cost`
-              : ""}
+          {truck.estimatedFuelCostEur !== undefined ? ` · ~€${truck.estimatedFuelCostEur} est. fuel cost` : ""}
           {" · "}
           {truck.fuelStops.length} fuel · {truck.serviceStops.length} maintenance · {truck.parkingStops.length} parking
         </p>

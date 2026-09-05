@@ -84,6 +84,31 @@ const GARAGE_ICON = poiIcon("🔧", "#38bdf8");
 const TOWING_ICON = poiIcon("🚨", "#fb923c");
 const PARKING_UNKNOWN_ICON = poiIcon("🅿️", "#6b7280");
 
+// Distinct pin markers at the exact route endpoints — independent of where
+// the animated truck currently sits along the route, so source/destination
+// stay visible at a glance even mid-route or when the truck is idle.
+function pinIcon(label: string, color: string) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="
+        width:22px; height:22px; border-radius:50% 50% 50% 0;
+        transform:rotate(-45deg);
+        background:${color}; border:2px solid #f2f0ea;
+        box-shadow:0 1px 4px rgba(0,0,0,.6);
+        display:flex; align-items:center; justify-content:center;
+      ">
+        <span style="
+          transform:rotate(45deg); font-size:10px; font-weight:700; color:white;
+        ">${label}</span>
+      </div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 22],
+  });
+}
+
+const SOURCE_ICON = pinIcon("S", "#16a34a");
+const DEST_ICON = pinIcon("D", "#c1272d");
+
 // Color reflects occupancy so a full lot is obvious before opening the
 // popup — only meaningful for mock TRAVIS-shaped spots that carry live
 // capacity numbers; real OSM-sourced spots render as neutral grey instead.
@@ -140,6 +165,21 @@ export default function TripLayer({ truck, elapsed, showFuel, showService, showP
   return (
     <>
       <Polyline positions={route} pathOptions={{ color, weight: 3, opacity: 0.6 }} />
+
+      {truck.sourceCoord && (
+        <Marker position={truck.sourceCoord} icon={SOURCE_ICON}>
+          <Tooltip direction="top" offset={[0, -20]} opacity={0.9}>
+            {truck.sourceLabel}
+          </Tooltip>
+        </Marker>
+      )}
+      {truck.destCoord && (
+        <Marker position={truck.destCoord} icon={DEST_ICON}>
+          <Tooltip direction="top" offset={[0, -20]} opacity={0.9}>
+            {truck.destinationLabel}
+          </Tooltip>
+        </Marker>
+      )}
 
       <Marker position={position} icon={truckIcon(color, truck.truckType)}>
         <Tooltip className="plate-tooltip" direction="top" offset={[0, -14]} permanent opacity={1}>
