@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useFleet } from "@/lib/fleetStore";
 import { enrichTruck } from "@/lib/enrichTruck";
 import type { TruckEntry, TruckStatus } from "@/mock/data";
 import ExcelUpload from "@/components/ExcelUpload";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 const STATUS_OPTIONS: TruckStatus[] = ["in_transit", "gps_silent", "idle"];
 
@@ -52,14 +54,22 @@ function TruckRow({ truck }: { truck: TruckEntry }) {
           <Field value={truck.truckType} onChange={(v) => patch({ truckType: v })} placeholder="Truck type" />
           <Field value={truck.truckPlate} onChange={(v) => patch({ truckPlate: v })} placeholder="Plate" />
         </div>
-        <button
-          type="button"
-          onClick={() => deleteTruck(truck.id)}
-          aria-label="Delete truck"
-          className="text-ink-muted hover:text-brand-red text-xs shrink-0"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href={`/driver/${truck.id}`}
+            className="font-display text-[10px] font-medium uppercase tracking-wide text-brand-gold hover:underline whitespace-nowrap"
+          >
+            Open route ↗
+          </Link>
+          <button
+            type="button"
+            onClick={() => deleteTruck(truck.id)}
+            aria-label="Delete truck"
+            className="text-ink-muted hover:text-brand-red text-xs"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -120,7 +130,7 @@ function TruckRow({ truck }: { truck: TruckEntry }) {
             onChange={(e) => patch({ whatsappAlertsEnabled: e.target.checked })}
             className="accent-[var(--brand-gold)]"
           />
-          📲 WhatsApp alerts
+          <WhatsAppIcon /> WhatsApp alerts
           <span className={truck.whatsappAlertsEnabled ? "text-brand-gold" : "text-ink-muted"}>
             {truck.whatsappAlertsEnabled ? "ON" : "OFF"}
           </span>

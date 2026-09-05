@@ -8,6 +8,8 @@ export interface FuelPriceStation {
   currency: string;
   distance_km: number;
   updated_at: string;
+  lat: number;
+  lng: number;
 }
 
 interface FuelPricesResponse {

@@ -59,6 +59,7 @@ function emptyTruck(): TruckEntry {
     fuelStops: [],
     serviceStops: [],
     parkingStops: [],
+    alertPoints: [],
     enrichStatus: "idle",
   };
 }

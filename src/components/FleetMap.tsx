@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer } from "react-leaflet";
-import type { TruckEntry, LatLng } from "@/mock/data";
+import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
+import type { TruckEntry, LatLng, AlertPointKind } from "@/mock/data";
 import TripLayer from "@/components/TripLayer";
+import { useFleet } from "@/lib/fleetStore";
 
 const TICK_MS = 1000;
 
@@ -28,6 +29,18 @@ const LAYER_TOGGLES: { key: keyof LayerVisibility; label: string; emoji: string 
   { key: "parking", label: "Parking", emoji: "🅿️" },
 ];
 
+// Captures the next map click while "add mode" is armed — must live inside
+// the MapContainer to reach Leaflet's click event via react-leaflet's hook.
+function AddPointCapture({ active, onCapture }: { active: boolean; onCapture: (pos: LatLng) => void }) {
+  useMapEvents({
+    click(e) {
+      if (!active) return;
+      onCapture([e.latlng.lat, e.latlng.lng]);
+    },
+  });
+  return null;
+}
+
 interface FleetMapProps {
   trucks: TruckEntry[];
   /** If set, only this truck's route/POIs are shown (used on the driver detail page). */
@@ -35,6 +48,8 @@ interface FleetMapProps {
 }
 
 export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
+  const { updateTruck } = useFleet();
+
   // Only trucks that have actually been located (route populated by
   // enrichTruck) AND are toggled visible get drawn — a truck with just a
   // driver name and no source/destination yet has nothing to show.
@@ -62,6 +77,40 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
     setTimeout(() => setToast(null), 6000);
   };
 
+  // "Add alert point" — only offered on a single-truck view (driver detail
+  // page): the fleet overview shows several trucks at once, and a map click
+  // there would have no unambiguous truck to attach the new point to.
+  const [addMode, setAddMode] = useState(false);
+  const [pendingPoint, setPendingPoint] = useState<LatLng | null>(null);
+  const [pointName, setPointName] = useState("");
+  const [pointKind, setPointKind] = useState<AlertPointKind>("fuel");
+
+  const handleCapture = (pos: LatLng) => {
+    setPendingPoint(pos);
+    setAddMode(false);
+  };
+
+  const confirmPendingPoint = () => {
+    if (!focusTruckId || !pendingPoint) return;
+    const truck = trucks.find((t) => t.id === focusTruckId);
+    if (!truck) return;
+    updateTruck(focusTruckId, {
+      alertPoints: [
+        ...truck.alertPoints,
+        {
+          id: `alert-${crypto.randomUUID()}`,
+          name: pointName.trim() || (pointKind === "fuel" ? "Custom fuel stop" : "Custom parking point"),
+          kind: pointKind,
+          position: pendingPoint,
+          notify: true,
+        },
+      ],
+    });
+    setPendingPoint(null);
+    setPointName("");
+    setPointKind("fuel");
+  };
+
   useEffect(() => {
     const start = Date.now();
     const interval = setInterval(() => {
@@ -78,7 +127,9 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
     // underlying Leaflet map instance persists across re-renders. So the
     // theme class has to live on this ordinary (fully reactive) wrapper div
     // instead, where the CSS descendant selector still reaches the tile pane.
-    <div className={`relative h-full w-full ${theme === "black" ? "theme-black" : ""}`}>
+    <div
+      className={`relative h-full w-full ${theme === "black" ? "theme-black" : ""} ${addMode ? "cursor-crosshair" : ""}`}
+    >
       <div className="absolute top-3 right-3 z-[1000] flex gap-1 rounded-md border border-hairline bg-surface-raised p-1 shadow-lg">
         {(["original", "black"] as const).map((t) => (
           <button
@@ -93,6 +144,24 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
           </button>
         ))}
       </div>
+
+      {/* Only on the single-truck (driver detail) view — see addMode's doc
+          comment for why the fleet overview doesn't offer this. */}
+      {focusTruckId && (
+        <div className="absolute bottom-3 right-3 z-[1000]">
+          <button
+            type="button"
+            onClick={() => setAddMode((v) => !v)}
+            className={`font-display text-[11px] font-medium uppercase tracking-wide px-2.5 py-1.5 rounded-md border shadow-lg transition-colors ${
+              addMode
+                ? "bg-brand-gold text-void border-brand-gold"
+                : "border-hairline bg-surface-raised text-ink-muted hover:text-ink"
+            }`}
+          >
+            {addMode ? "Click the map to place…" : "+ Add alert point"}
+          </button>
+        </div>
+      )}
 
       {/* POI layer toggles, opposite side from the map-theme control so the
           two don't compete for the same corner. */}
@@ -126,6 +195,7 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <AddPointCapture active={addMode && !!focusTruckId} onCapture={handleCapture} />
         {visibleTrucks.map((truck) => (
           <TripLayer
             key={truck.id}
@@ -138,6 +208,54 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
           />
         ))}
       </MapContainer>
+
+      {pendingPoint && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] flex flex-col gap-2 rounded-md border border-hairline bg-surface-raised p-3 shadow-lg w-64">
+          <p className="font-display text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+            New alert point
+          </p>
+          <input
+            value={pointName}
+            onChange={(e) => setPointName(e.target.value)}
+            placeholder={pointKind === "fuel" ? "Custom fuel stop" : "Custom parking point"}
+            autoFocus
+            className="w-full bg-transparent border-b border-hairline focus:border-brand-gold outline-none text-sm py-0.5 placeholder:text-ink-muted/50"
+          />
+          <div className="flex gap-1">
+            {(["fuel", "parking"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setPointKind(k)}
+                className={`flex-1 font-display text-[11px] font-medium uppercase tracking-wide px-2 py-1 rounded transition-colors ${
+                  pointKind === k ? "bg-brand-gold text-void" : "border border-hairline text-ink-muted hover:text-ink"
+                }`}
+              >
+                {k === "fuel" ? "⛽ Fuel" : "🅿️ Parking"}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-ink-muted">
+            🔔 Will notify the driver via WhatsApp when in range — same as any other alert point.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setPendingPoint(null)}
+              className="font-display text-[11px] font-medium uppercase tracking-wide px-2.5 py-1 rounded border border-hairline text-ink-muted hover:text-ink transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmPendingPoint}
+              className="font-display text-[11px] font-medium uppercase tracking-wide px-2.5 py-1 rounded bg-brand-gold text-void hover:bg-brand-gold/90 transition-colors"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div

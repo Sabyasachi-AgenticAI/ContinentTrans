@@ -32,11 +32,11 @@ export default function DriverDetailPage() {
         </Link>
         <div className="flex items-center gap-3 mt-1">
           <Image
-            src="/continent-trans-logo.jpg"
+            src="/continent-trans-logo-wide.jpg"
             alt="Continent Trans"
-            width={400}
-            height={400}
-            className="h-8 w-28 object-cover"
+            width={1024}
+            height={256}
+            className="h-7 w-32 object-contain"
           />
           <div>
             <h1 className="font-display text-lg font-semibold uppercase tracking-wide text-ink">

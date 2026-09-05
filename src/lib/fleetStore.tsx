@@ -36,6 +36,7 @@ function blankTruck(): TruckEntry {
     fuelStops: [],
     serviceStops: [],
     parkingStops: [],
+    alertPoints: [],
     enrichStatus: "idle",
   };
 }
@@ -79,7 +80,14 @@ export function FleetProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) dispatch({ type: "SET_ALL", trucks: JSON.parse(saved) });
+      if (saved) {
+        // Backfills fields added after some browsers already had trucks
+        // persisted (e.g. alertPoints) — without this, an old saved truck
+        // crashes any code that iterates a field it predates.
+        const parsed: TruckEntry[] = JSON.parse(saved);
+        const migrated = parsed.map((t) => ({ ...t, alertPoints: t.alertPoints ?? [] }));
+        dispatch({ type: "SET_ALL", trucks: migrated });
+      }
     } catch {
       // corrupt or inaccessible storage — fall back to the default fleet
     }

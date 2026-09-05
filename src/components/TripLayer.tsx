@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { Marker, Polyline, Popup, Tooltip } from "react-leaflet";
 import L from "leaflet";
-import type { TruckEntry, FuelStop, LatLng } from "@/mock/data";
+import type { TruckEntry, FuelStop, AlertPoint, LatLng } from "@/mock/data";
 import { interpolateAlongRoute, haversineKm } from "@/lib/geo";
 import { fetchTruckRoute, type RouteSource } from "@/lib/routing";
 import { fetchNearbyFuelPrices, type FuelPriceStation } from "@/lib/fuelPrices";
 import { useFleet } from "@/lib/fleetStore";
 import { hasAlerted, markAlerted } from "@/lib/whatsappAlertLog";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 const DEMO_LOOP_SECONDS = 90;
 
@@ -85,6 +86,9 @@ const FUEL_ICON = poiIcon("⛽", "#facc15");
 const GARAGE_ICON = poiIcon("🔧", "#38bdf8");
 const TOWING_ICON = poiIcon("🚨", "#fb923c");
 const PARKING_UNKNOWN_ICON = poiIcon("🅿️", "#6b7280");
+// Distinct violet so a dispatcher-placed pin reads as "manually added" at a
+// glance, not confused with a real OSM-sourced parking spot (grey/green/red).
+const CUSTOM_PARKING_ICON = poiIcon("🅿️", "#a78bfa");
 
 // Distinct pin markers at the exact route endpoints — independent of where
 // the animated truck currently sits along the route, so source/destination
@@ -183,7 +187,14 @@ export default function TripLayer({
   useEffect(() => {
     if (!truck.whatsappAlertsEnabled) return;
     if (!truck.phone || truck.status !== "in_transit" || route.length === 0) return;
-    for (const stop of truck.fuelStops) {
+    // Both auto-sampled fuel stops (notify opted-in individually) and
+    // dispatcher-placed alert points (notify on by default) feed the same
+    // proximity check — one mechanism, two ways to end up in the list.
+    const candidates: { id: string; name: string; position: LatLng; notify?: boolean }[] = [
+      ...truck.fuelStops,
+      ...truck.alertPoints,
+    ];
+    for (const stop of candidates) {
       if (!stop.notify) continue;
       if (hasAlerted(truck.id, stop.id)) continue;
       if (haversineKm(position, stop.position) > truck.fuelProximityKm) continue;
@@ -259,6 +270,16 @@ export default function TripLayer({
 
       {showFuel &&
         truck.fuelStops.map((f) => <FuelStopMarker key={f.id} stop={f} truckId={truck.id} />)}
+
+      {showFuel &&
+        truck.alertPoints
+          .filter((p) => p.kind === "fuel")
+          .map((p) => <AlertPointMarker key={p.id} point={p} truckId={truck.id} />)}
+
+      {showParking &&
+        truck.alertPoints
+          .filter((p) => p.kind === "parking")
+          .map((p) => <AlertPointMarker key={p.id} point={p} truckId={truck.id} />)}
 
       {showService &&
         truck.serviceStops.map((s) => (
@@ -341,13 +362,15 @@ function FuelStopMarker({ stop, truckId }: { stop: FuelStop; truckId: string }) 
   const [attribution, setAttribution] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
 
-  const toggleNotify = () => {
+  const updateStop = (patch: Partial<FuelStop>) => {
     const truck = trucks.find((t) => t.id === truckId);
     if (!truck) return;
     updateTruck(truckId, {
-      fuelStops: truck.fuelStops.map((s) => (s.id === stop.id ? { ...s, notify: !s.notify } : s)),
+      fuelStops: truck.fuelStops.map((s) => (s.id === stop.id ? { ...s, ...patch } : s)),
     });
   };
+
+  const toggleNotify = () => updateStop({ notify: !stop.notify });
 
   const loadPrices = () => {
     if (state !== "idle") return;
@@ -419,14 +442,49 @@ function FuelStopMarker({ stop, truckId }: { stop: FuelStop; truckId: string }) 
                 >
                   {attribution}
                 </a>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateStop({
+                      position: [stations[0].lat, stations[0].lng],
+                      name: stations[0].name,
+                      brand: stations[0].brand,
+                    })
+                  }
+                  className="mt-1.5 text-[10px] text-brand-gold underline block"
+                >
+                  📍 Move alert to this real station&apos;s exact location
+                </button>
               </>
             )}
           </div>
 
           <div className="mt-2 border-t border-hairline pt-2">
+            <p className="text-[10px] text-ink-muted mb-1">
+              Alert location (drag the numbers, or use the button above once prices load):
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                step="0.0001"
+                value={stop.position[0]}
+                onChange={(e) => updateStop({ position: [Number(e.target.value), stop.position[1]] })}
+                className="w-24 bg-surface border border-hairline rounded px-1 py-0.5 text-xs font-mono"
+              />
+              <input
+                type="number"
+                step="0.0001"
+                value={stop.position[1]}
+                onChange={(e) => updateStop({ position: [stop.position[0], Number(e.target.value)] })}
+                className="w-24 bg-surface border border-hairline rounded px-1 py-0.5 text-xs font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="mt-2 border-t border-hairline pt-2">
             <label className="flex items-center gap-1.5 text-xs">
               <input type="checkbox" checked={!!stop.notify} onChange={toggleNotify} />
-              🔔 Notify driver via WhatsApp here
+              <WhatsAppIcon /> Notify driver via WhatsApp here
             </label>
             {stop.notify && parentTruck && !parentTruck.whatsappAlertsEnabled && (
               <p className="text-[10px] text-ink-muted mt-1">
@@ -434,6 +492,63 @@ function FuelStopMarker({ stop, truckId }: { stop: FuelStop; truckId: string }) 
               </p>
             )}
           </div>
+        </div>
+      </Popup>
+    </Marker>
+  );
+}
+
+// Dispatcher-placed, on the fly (see FleetMap's click-to-add flow) — simpler
+// than FuelStopMarker (no live price lookup) since these aren't necessarily
+// even real named stations; notify defaults on since that's the reason a
+// dispatcher drops one in the first place.
+function AlertPointMarker({ point, truckId }: { point: AlertPoint; truckId: string }) {
+  const { trucks, updateTruck } = useFleet();
+  const parentTruck = trucks.find((t) => t.id === truckId);
+
+  const updatePoint = (patch: Partial<AlertPoint>) => {
+    const truck = trucks.find((t) => t.id === truckId);
+    if (!truck) return;
+    updateTruck(truckId, {
+      alertPoints: truck.alertPoints.map((p) => (p.id === point.id ? { ...p, ...patch } : p)),
+    });
+  };
+
+  const removePoint = () => {
+    const truck = trucks.find((t) => t.id === truckId);
+    if (!truck) return;
+    updateTruck(truckId, { alertPoints: truck.alertPoints.filter((p) => p.id !== point.id) });
+  };
+
+  return (
+    <Marker position={point.position} icon={point.kind === "fuel" ? FUEL_ICON : CUSTOM_PARKING_ICON}>
+      <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+        <span className="font-semibold">{point.name}</span> — added manually
+      </Tooltip>
+      <Popup>
+        <div className="text-sm font-sans min-w-[180px]">
+          <p className="font-display font-semibold">{point.name}</p>
+          <p className="text-xs text-ink-muted capitalize">Manually added {point.kind} point</p>
+
+          <div className="mt-2 border-t border-hairline pt-2">
+            <label className="flex items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                checked={point.notify}
+                onChange={(e) => updatePoint({ notify: e.target.checked })}
+              />
+              <WhatsAppIcon /> Notify driver via WhatsApp here
+            </label>
+            {point.notify && parentTruck && !parentTruck.whatsappAlertsEnabled && (
+              <p className="text-[10px] text-ink-muted mt-1">
+                This truck&apos;s WhatsApp alerts are off — turn it on in Fleet Status to actually send.
+              </p>
+            )}
+          </div>
+
+          <button type="button" onClick={removePoint} className="mt-2 text-[10px] text-brand-red underline block">
+            ✕ Remove this point
+          </button>
         </div>
       </Popup>
     </Marker>
