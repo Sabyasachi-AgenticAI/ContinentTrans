@@ -16,9 +16,9 @@ const DEMO_LOOP_SECONDS = 90;
 // Same semantics as the instrument-cluster dots in FleetEditor: gold =
 // running normally, red = needs attention, grey = parked/idle.
 const STATUS_COLOR: Record<TruckEntry["status"], string> = {
-  in_transit: "#c9a24b",
+  in_transit: "#22c55e",
   gps_silent: "#c1272d",
-  idle: "#6b7280",
+  idle: "#eab308",
 };
 
 // Manufacturer badges use short text codes + a brand-adjacent color, not the

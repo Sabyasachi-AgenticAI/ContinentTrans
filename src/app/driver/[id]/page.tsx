@@ -26,7 +26,7 @@ export default function DriverDetailPage() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-void">
-      <header className="border-b border-hairline bg-black px-4 py-3">
+      <header className="border-b border-hairline bg-void px-4 py-3">
         <Link href="/" className="text-xs text-brand-gold">
           ← All drivers
         </Link>
@@ -59,7 +59,7 @@ export default function DriverDetailPage() {
         <main className="flex-1 min-h-0">
           <FleetMap trucks={[truck]} focusTruckId={truck.id} />
         </main>
-        <aside className="w-80 shrink-0 border-l border-hairline bg-surface overflow-y-auto p-4 flex flex-col gap-4 text-sm">
+        <aside className="w-80 shrink-0 border-l border-hairline bg-void overflow-y-auto p-4 flex flex-col gap-4 text-sm">
           {!truck.route && (
             <p className="text-xs text-ink-muted">
               Not located yet — set a source/destination and hit Locate on the dashboard.
