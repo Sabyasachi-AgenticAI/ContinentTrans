@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useFleet } from "@/lib/fleetStore";
@@ -8,8 +9,25 @@ import NavRail from "@/components/NavRail";
 
 const FleetMap = dynamic(() => import("@/components/FleetMap"), { ssr: false });
 
+function ChevronIcon({ direction, className }: { direction: "left" | "right"; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d={direction === "left" ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"} />
+    </svg>
+  );
+}
+
 export default function Dashboard() {
   const { trucks } = useFleet();
+  const [statusOpen, setStatusOpen] = useState(true);
 
   return (
     <div className="flex flex-1 min-h-0">
@@ -21,13 +39,16 @@ export default function Dashboard() {
             a small badge, not competing for the same space. Flowgentic AI
             GmbH (the maker) gets a quiet footer credit — see below the
             Fleet Status section. */}
-        {/* Two equal flex-1 side columns keep the logo mathematically
-            centered regardless of how "Live" vs "Flowgentic TRAK" differ in
-            width — more robust than a grid-cols arbitrary value, which
-            didn't compile here and silently collapsed to a single stacked
-            column. */}
-        <header className="relative flex items-center gap-3 bg-void pl-6 pr-3 py-2 sm:py-3 shrink-0">
-          <div className="flex flex-1 items-center gap-2 justify-start">
+        {/* The logo is the header's only in-flow content, centered by
+            `justify-center` alone — mathematically exact regardless of
+            viewport width. "Live" and "Flowgentic TRAK" are pulled out of
+            flow entirely (absolute, pinned to their own edge) so neither
+            can compete for space with the other and drag the logo
+            off-center — which is exactly what a two-column flex-1 layout
+            did here once one side got a `whitespace-nowrap` and the other
+            didn't: the unprotected side shrank first, unevenly. */}
+        <header className="relative flex items-center justify-center bg-void px-6 py-2 sm:py-3 shrink-0">
+          <div className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-[#34d399] live-pulse" />
             <span className="font-display text-sm font-medium uppercase tracking-[0.2em] text-ink-muted">
               Live
@@ -43,11 +64,11 @@ export default function Dashboard() {
             alt="Continent Trans"
             width={1024}
             height={256}
-            className="h-14 sm:h-16 md:h-20 w-auto shrink-0 object-contain"
+            className="h-14 sm:h-16 md:h-20 w-auto object-contain"
             priority
           />
 
-          <div className="flex flex-1 justify-end items-baseline gap-1 whitespace-nowrap font-display text-sm sm:text-base font-medium tracking-[0.04em] text-ink-muted">
+          <div className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 flex items-baseline gap-1 whitespace-nowrap font-display text-sm sm:text-base font-medium tracking-[0.04em] text-ink-muted">
             <span>Flowgentic</span>
             <span className="text-brand-gold">TRAK</span>
           </div>
@@ -63,15 +84,37 @@ export default function Dashboard() {
             <FleetMap trucks={trucks} />
           </main>
 
-          <aside className="w-96 shrink-0 border-l border-hairline bg-void overflow-y-auto flex flex-col">
-            <div className="flex items-center gap-2 px-4 pt-4 pb-1 shrink-0">
-              <span className="h-3.5 w-0.5 bg-gradient-to-b from-brand-red to-brand-gold rounded-full" />
-              <h2 className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink">
+          {statusOpen ? (
+            <aside className="w-96 shrink-0 border-l border-hairline bg-void overflow-y-auto flex flex-col">
+              <div className="flex items-center gap-2 px-4 pt-4 pb-1 shrink-0">
+                <span className="h-3.5 w-0.5 bg-gradient-to-b from-brand-red to-brand-gold rounded-full" />
+                <h2 className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink flex-1">
+                  Fleet status
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setStatusOpen(false)}
+                  aria-label="Collapse fleet status"
+                  className="text-ink-muted hover:text-ink transition-colors"
+                >
+                  <ChevronIcon direction="right" className="h-4 w-4" />
+                </button>
+              </div>
+              <FleetEditor />
+            </aside>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setStatusOpen(true)}
+              aria-label="Expand fleet status"
+              className="w-8 shrink-0 border-l border-hairline bg-void flex flex-col items-center gap-3 pt-4 text-ink-muted hover:text-ink hover:bg-surface-raised transition-colors"
+            >
+              <ChevronIcon direction="left" className="h-4 w-4" />
+              <span className="[writing-mode:vertical-rl] font-display text-[10px] font-medium uppercase tracking-[0.15em]">
                 Fleet status
-              </h2>
-            </div>
-            <FleetEditor />
-          </aside>
+              </span>
+            </button>
+          )}
         </div>
 
         {/* A flat black bar here just disappeared into the header/aside's own
