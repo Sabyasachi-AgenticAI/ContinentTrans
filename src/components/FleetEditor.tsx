@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useFleet } from "@/lib/fleetStore";
 import { enrichTruck } from "@/lib/enrichTruck";
@@ -8,6 +9,12 @@ import ExcelUpload from "@/components/ExcelUpload";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 const STATUS_OPTIONS: TruckStatus[] = ["in_transit", "gps_silent", "idle"];
+
+const STATUS_LABEL: Record<TruckStatus, string> = {
+  in_transit: "In transit",
+  gps_silent: "GPS silent",
+  idle: "Idle",
+};
 
 // Same instrument-cluster semantics as the map markers: steady gold =
 // running normally, pulsing red = needs attention, grey = idle.
@@ -166,6 +173,20 @@ function TruckRow({ truck }: { truck: TruckEntry }) {
 
 export default function FleetEditor() {
   const { trucks, addBlankTruck } = useFleet();
+  // All three shown by default — this filters which trucks appear in this
+  // list only; it's independent of each truck's own "Show on map" checkbox.
+  const [visibleStatuses, setVisibleStatuses] = useState<Set<TruckStatus>>(
+    () => new Set(STATUS_OPTIONS),
+  );
+  const toggleStatus = (status: TruckStatus) =>
+    setVisibleStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+
+  const filteredTrucks = trucks.filter((t) => visibleStatuses.has(t.status));
 
   return (
     <div className="flex flex-col gap-3">
@@ -180,10 +201,36 @@ export default function FleetEditor() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-4">
-        {trucks.map((truck) => (
-          <TruckRow key={truck.id} truck={truck} />
-        ))}
+      <div className="flex items-center gap-2 px-4 pt-2 pb-1 border-t border-hairline/60">
+        <span className="font-display text-[10px] uppercase tracking-[0.15em] text-ink-muted/70 shrink-0">
+          Filter
+        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {STATUS_OPTIONS.map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => toggleStatus(status)}
+              aria-pressed={visibleStatuses.has(status)}
+              className={`flex items-center gap-1.5 font-display text-[10px] font-medium uppercase tracking-wide px-2 py-1 rounded-full border transition-colors ${
+                visibleStatuses.has(status)
+                  ? "border-brand-gold/50 bg-surface-raised text-ink"
+                  : "border-hairline text-ink-muted/60 hover:text-ink-muted"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[status].replace(" led-pulse", "")}`} />
+              {STATUS_LABEL[status]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 px-4 pb-4">
+        {filteredTrucks.length === 0 ? (
+          <p className="text-xs text-ink-muted text-center py-8">No trucks match the selected filters.</p>
+        ) : (
+          filteredTrucks.map((truck) => <TruckRow key={truck.id} truck={truck} />)
+        )}
       </div>
     </div>
   );

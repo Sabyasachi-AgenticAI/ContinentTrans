@@ -56,8 +56,28 @@ body {
   animation: led-pulse 1.8s ease-in-out infinite;
 }
 
+/* Same mechanism, green — the header's "Live" indicator, distinct from the
+   red warning pulse above (a different signal: "connected," not "attend to
+   this truck"). */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(52 211 153 / 0.6);
+  }
+  50% {
+    opacity: 0.75;
+    box-shadow: 0 0 0 5px rgb(52 211 153 / 0);
+  }
+}
+
+.live-pulse {
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .led-pulse {
+  .led-pulse,
+  .live-pulse {
     animation: none;
   }
 }

@@ -40,7 +40,7 @@ export default function ExcelUpload() {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="font-display text-xs font-medium uppercase tracking-wide px-3 py-1.5 rounded bg-brand-gold text-void hover:bg-brand-gold/90 transition-colors"
+        className="font-display text-xs font-medium uppercase tracking-wide px-3 py-1.5 rounded border border-hairline text-ink-muted hover:text-ink hover:border-brand-gold/50 transition-colors"
       >
         Upload Excel
       </button>

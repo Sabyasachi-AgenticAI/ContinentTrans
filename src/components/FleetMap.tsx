@@ -183,8 +183,9 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
       </div>
 
       <MapContainer
-        center={center}
-        zoom={focusTruckId ? 6 : 5}
+        {...(focusTruckId
+          ? { center, zoom: 6 }
+          : { bounds: EUROPE_BOUNDS, boundsOptions: { padding: [16, 16] as [number, number] } })}
         minZoom={4}
         maxBounds={EUROPE_BOUNDS}
         maxBoundsViscosity={1.0}
