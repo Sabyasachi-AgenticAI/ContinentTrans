@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useFleet } from "@/lib/fleetStore";
@@ -27,7 +27,15 @@ function ChevronIcon({ direction, className }: { direction: "left" | "right"; cl
 
 export default function Dashboard() {
   const { trucks } = useFleet();
+  // Defaults open on desktop, closed on phones — a 384px sidebar plus the
+  // 64px nav rail left the map with zero (sometimes negative) width on a
+  // narrow screen, which crashed Leaflet outright ("Invalid LatLng object:
+  // (NaN, NaN)") instead of just looking cramped. Checked after mount, not
+  // in the initializer, since `window` doesn't exist during SSR.
   const [statusOpen, setStatusOpen] = useState(true);
+  useEffect(() => {
+    if (window.innerWidth < 768) setStatusOpen(false);
+  }, []);
 
   return (
     <div className="flex flex-1 min-h-0">
@@ -46,9 +54,13 @@ export default function Dashboard() {
             can compete for space with the other and drag the logo
             off-center — which is exactly what a two-column flex-1 layout
             did here once one side got a `whitespace-nowrap` and the other
-            didn't: the unprotected side shrank first, unevenly. */}
+            didn't: the unprotected side shrank first, unevenly. Absolute
+            positioning has no built-in collision avoidance, though — below
+            `sm` there just isn't room for both badges beside the logo
+            without overlapping it, so they're hidden on phones and the logo
+            stands alone. */}
         <header className="relative flex items-center justify-center bg-void px-6 py-2 sm:py-3 shrink-0">
-          <div className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
+          <div className="hidden sm:flex absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-[#34d399] live-pulse" />
             <span className="font-display text-sm font-medium uppercase tracking-[0.2em] text-ink-muted">
               Live
@@ -68,7 +80,7 @@ export default function Dashboard() {
             priority
           />
 
-          <div className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 flex items-baseline gap-1 whitespace-nowrap font-display text-sm sm:text-base font-medium tracking-[0.04em] text-ink-muted">
+          <div className="hidden sm:flex absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 items-baseline gap-1 whitespace-nowrap font-display text-sm sm:text-base font-medium tracking-[0.04em] text-ink-muted">
             <span>Flowgentic</span>
             <span className="text-brand-gold">TRAK</span>
           </div>
@@ -85,7 +97,7 @@ export default function Dashboard() {
           </main>
 
           {statusOpen ? (
-            <aside className="w-96 shrink-0 border-l border-hairline bg-void overflow-y-auto flex flex-col">
+            <aside className="fixed inset-0 z-40 sm:static sm:inset-auto sm:z-auto sm:w-96 shrink-0 border-l border-hairline bg-void overflow-y-auto flex flex-col">
               <div className="flex items-center gap-2 px-4 pt-4 pb-1 shrink-0">
                 <span className="h-3.5 w-0.5 bg-gradient-to-b from-brand-red to-brand-gold rounded-full" />
                 <h2 className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink flex-1">

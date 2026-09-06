@@ -119,7 +119,16 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
     return () => clearInterval(interval);
   }, []);
 
-  const center: LatLng = visibleTrucks[0]?.route?.[0] ?? [47.0, 20.0];
+  // A fixed center/zoom for the overview, not MapContainer's declarative
+  // `bounds`/fitBounds — fitBounds computes zoom from the container's pixel
+  // size at construction time, and that measurement can race a layout
+  // change (e.g. the Fleet Status panel switching in/out of flow), leaving
+  // Leaflet fitting to a momentarily zero-sized box and crashing with
+  // "Invalid LatLng object: (NaN, NaN)". minZoom + maxBounds below already
+  // keep the pannable area constrained to Europe without needing fitBounds.
+  const center: LatLng = focusTruckId
+    ? (visibleTrucks[0]?.route?.[0] ?? [47.0, 20.0])
+    : [50, 15];
 
   return (
     // react-leaflet's MapContainer only applies `className` once, at map
@@ -183,9 +192,8 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
       </div>
 
       <MapContainer
-        {...(focusTruckId
-          ? { center, zoom: 6 }
-          : { bounds: EUROPE_BOUNDS, boundsOptions: { padding: [16, 16] as [number, number] } })}
+        center={center}
+        zoom={focusTruckId ? 6 : 4}
         minZoom={4}
         maxBounds={EUROPE_BOUNDS}
         maxBoundsViscosity={1.0}
