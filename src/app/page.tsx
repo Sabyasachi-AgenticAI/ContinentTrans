@@ -97,7 +97,7 @@ export default function Dashboard() {
           </main>
 
           {statusOpen ? (
-            <aside className="fixed inset-0 z-40 sm:static sm:inset-auto sm:z-auto sm:w-96 shrink-0 border-l border-hairline bg-void overflow-y-auto flex flex-col">
+            <aside className="fixed inset-0 z-[2000] sm:static sm:inset-auto sm:z-auto sm:w-96 shrink-0 border-l border-hairline bg-void overflow-y-auto flex flex-col">
               <div className="flex items-center gap-2 px-4 pt-4 pb-1 shrink-0">
                 <span className="h-3.5 w-0.5 bg-gradient-to-b from-brand-red to-brand-gold rounded-full" />
                 <h2 className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink flex-1">
