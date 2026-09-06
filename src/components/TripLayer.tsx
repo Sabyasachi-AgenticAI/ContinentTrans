@@ -170,12 +170,12 @@ export default function TripLayer({
   const color = STATUS_COLOR[truck.status];
 
   const loopT = (truck.startProgress + elapsed / DEMO_LOOP_SECONDS) % 1;
-  const { position } =
+  const position: LatLng =
     route.length === 0
-      ? { position: [0, 0] as LatLng, bearing: 0 }
+      ? [0, 0]
       : truck.status === "in_transit"
-        ? interpolateAlongRoute(route, loopT)
-        : interpolateAlongRoute(route, truck.status === "idle" ? 0 : truck.startProgress);
+        ? interpolateAlongRoute(route, loopT).position
+        : interpolateAlongRoute(route, truck.status === "idle" ? 0 : truck.startProgress).position;
 
   // Proximity check against the truck's real phone number, on the demo's
   // simulated position — no live GPS feed exists yet, so this proves the
