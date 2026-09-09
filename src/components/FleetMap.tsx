@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, ZoomControl, useMapEvents } from "react-leaflet";
 import type { TruckEntry, LatLng, AlertPointKind } from "@/mock/data";
 import TripLayer from "@/components/TripLayer";
 import { useFleet } from "@/lib/fleetStore";
@@ -137,7 +137,7 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
     // theme class has to live on this ordinary (fully reactive) wrapper div
     // instead, where the CSS descendant selector still reaches the tile pane.
     <div
-      className={`relative h-full w-full ${theme === "black" ? "theme-black" : ""} ${addMode ? "cursor-crosshair" : ""}`}
+      className={`relative h-full w-full rounded-2xl overflow-hidden ${theme === "black" ? "theme-black" : ""} ${addMode ? "cursor-crosshair" : ""}`}
     >
       <div className="absolute top-3 right-3 z-[1000] flex gap-1 rounded-md border border-hairline bg-surface-raised p-1 shadow-lg">
         {(["original", "black"] as const).map((t) => (
@@ -157,7 +157,7 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
       {/* Only on the single-truck (driver detail) view — see addMode's doc
           comment for why the fleet overview doesn't offer this. */}
       {focusTruckId && (
-        <div className="absolute bottom-3 right-3 z-[1000]">
+        <div className="absolute bottom-24 right-3 z-[1000]">
           <button
             type="button"
             onClick={() => setAddMode((v) => !v)}
@@ -199,11 +199,15 @@ export default function FleetMap({ trucks, focusTruckId }: FleetMapProps) {
         maxBoundsViscosity={1.0}
         className="h-full w-full"
         scrollWheelZoom
+        zoomControl={false}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        {/* Default zoom control sits top-left, right under the Fuel/Maintenance/
+            Parking layer toggles above — bottom-right is clear on every view. */}
+        <ZoomControl position="bottomright" />
         <AddPointCapture active={addMode && !!focusTruckId} onCapture={handleCapture} />
         {visibleTrucks.map((truck) => (
           <TripLayer

@@ -4,11 +4,24 @@ import { useState } from "react";
 import Link from "next/link";
 import { useFleet } from "@/lib/fleetStore";
 import { enrichTruck } from "@/lib/enrichTruck";
-import type { TruckEntry, TruckStatus } from "@/mock/data";
+import type { TruckEntry, TruckStatus, DriverLanguage, AlertRuleKind } from "@/mock/data";
 import ExcelUpload from "@/components/ExcelUpload";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 const STATUS_OPTIONS: TruckStatus[] = ["in_transit", "gps_silent", "idle"];
+
+const RULE_OPTIONS: { key: AlertRuleKind; label: string; unit: string }[] = [
+  { key: "near_fuel_stop", label: "Near fuel stop", unit: "km" },
+  { key: "near_parking", label: "Near parking", unit: "km" },
+  { key: "gps_silent", label: "GPS idle", unit: "min" },
+];
+
+const LANGUAGE_OPTIONS: DriverLanguage[] = ["ro", "en"];
+
+const LANGUAGE_LABEL: Record<DriverLanguage, string> = {
+  ro: "Română",
+  en: "English",
+};
 
 const STATUS_LABEL: Record<TruckStatus, string> = {
   in_transit: "In transit",
@@ -236,33 +249,87 @@ function TruckCard({
             </button>
           </div>
 
-          {/* Per-truck, not fleet-wide — each truck's WhatsApp alerting is its
-              own setting, deliberately, after an earlier version's single
-              fleet-wide switch turned out to be the wrong shape for this. */}
+          {/* Three independent triggers, each its own switch + threshold —
+              no fleet-wide master switch and no single shared radius. Truck
+              1 can run fuel-proximity only, truck 2 parking-proximity only,
+              truck 3 GPS-idle only, each at its own number, deliberately,
+              after an earlier version's single switch+radius turned out to
+              be the wrong shape for this. */}
+          <div className="flex flex-col gap-1.5 pt-1 border-t border-hairline">
+            <div className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+              <WhatsAppIcon /> WhatsApp triggers
+            </div>
+            {RULE_OPTIONS.map(({ key, label, unit }) => {
+              const rule = truck.alertRules[key];
+              return (
+                <label key={key} className="flex items-center gap-2 text-[11px] text-ink-muted">
+                  <input
+                    type="checkbox"
+                    checked={rule.enabled}
+                    onChange={(e) =>
+                      patch({
+                        alertRules: {
+                          ...truck.alertRules,
+                          [key]: { ...rule, enabled: e.target.checked },
+                        },
+                      })
+                    }
+                    className="accent-[var(--brand-gold)]"
+                  />
+                  <span className={`w-24 ${rule.enabled ? "text-ink" : ""}`}>{label}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={rule.threshold}
+                    onChange={(e) =>
+                      patch({
+                        alertRules: {
+                          ...truck.alertRules,
+                          [key]: { ...rule, threshold: Number(e.target.value) || 1 },
+                        },
+                      })
+                    }
+                    className="w-12 bg-surface border border-hairline rounded px-1 py-0.5 text-ink"
+                  />
+                  {unit}
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Per-driver, not fleet-wide — same reasoning as WhatsApp alerts
+              above. "Message" governs the WhatsApp bot's text replies;
+              "Voice" is set aside for a future voice agent and isn't
+              consumed anywhere yet. */}
           <div className="flex items-center gap-3 pt-1 border-t border-hairline">
             <label className="flex items-center gap-1.5 text-[11px] text-ink-muted">
-              <input
-                type="checkbox"
-                checked={truck.whatsappAlertsEnabled}
-                onChange={(e) => patch({ whatsappAlertsEnabled: e.target.checked })}
-                className="accent-[var(--brand-gold)]"
-              />
-              <WhatsAppIcon /> WhatsApp alerts
-              <span className={truck.whatsappAlertsEnabled ? "text-brand-gold" : "text-ink-muted"}>
-                {truck.whatsappAlertsEnabled ? "ON" : "OFF"}
-              </span>
+              Message
+              <select
+                value={truck.language}
+                onChange={(e) => patch({ language: e.target.value as DriverLanguage })}
+                className="bg-surface border border-hairline rounded text-xs px-1.5 py-1 text-ink"
+              >
+                {LANGUAGE_OPTIONS.map((lang) => (
+                  <option key={lang} value={lang}>
+                    {LANGUAGE_LABEL[lang]}
+                  </option>
+                ))}
+              </select>
             </label>
-            <label className="flex items-center gap-1 text-[11px] text-ink-muted">
-              radius
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={truck.fuelProximityKm}
-                onChange={(e) => patch({ fuelProximityKm: Number(e.target.value) || 1 })}
-                className="w-12 bg-surface border border-hairline rounded px-1 py-0.5 text-ink"
-              />
-              km
+            <label className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+              Voice
+              <select
+                value={truck.voiceLanguage}
+                onChange={(e) => patch({ voiceLanguage: e.target.value as DriverLanguage })}
+                className="bg-surface border border-hairline rounded text-xs px-1.5 py-1 text-ink"
+              >
+                {LANGUAGE_OPTIONS.map((lang) => (
+                  <option key={lang} value={lang}>
+                    {LANGUAGE_LABEL[lang]}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
 

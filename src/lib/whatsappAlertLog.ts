@@ -28,3 +28,19 @@ export function markAlerted(truckId: string, stopId: string): void {
     // remembered across a reload
   }
 }
+
+/**
+ * Undoes markAlerted — used when a send actually failed, so a stop marked
+ * eagerly (to block duplicate sends while the request is in flight) doesn't
+ * stay permanently blocked from ever retrying just because that one attempt
+ * failed (e.g. a template misconfigured on Meta's side at the time).
+ */
+export function clearAlerted(truckId: string, stopId: string): void {
+  try {
+    const log = readLog();
+    log.delete(`${truckId}:${stopId}`);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...log]));
+  } catch {
+    // storage unavailable — nothing to undo
+  }
+}

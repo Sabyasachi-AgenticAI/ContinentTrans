@@ -8,7 +8,8 @@ import { interpolateAlongRoute, haversineKm } from "@/lib/geo";
 import { fetchTruckRoute, type RouteSource } from "@/lib/routing";
 import { fetchNearbyFuelPrices, type FuelPriceStation } from "@/lib/fuelPrices";
 import { useFleet } from "@/lib/fleetStore";
-import { hasAlerted, markAlerted } from "@/lib/whatsappAlertLog";
+import { hasAlerted, markAlerted, clearAlerted } from "@/lib/whatsappAlertLog";
+import { sendTruckAlert } from "@/lib/whatsappTemplates";
 import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 const DEMO_LOOP_SECONDS = 90;
@@ -177,47 +178,85 @@ export default function TripLayer({
         ? interpolateAlongRoute(route, loopT).position
         : interpolateAlongRoute(route, truck.status === "idle" ? 0 : truck.startProgress).position;
 
-  // Proximity check against the truck's real phone number, on the demo's
-  // simulated position — no live GPS feed exists yet, so this proves the
-  // alert mechanism against the same animated movement already on the map,
-  // not a real driver's real location. Gated on THIS TRUCK's own switch —
-  // deliberately no fleet-wide master switch; each truck's alerting is
-  // entirely its own setting — AND this specific stop being marked
-  // "notify" (not every fuel stop within range should message the driver).
+  // Three independent per-truck WhatsApp triggers (see TruckEntry.alertRules):
+  // proximity to a notify-marked fuel stop, proximity to a notify-marked
+  // parking point, and GPS gone quiet for longer than the configured
+  // minutes — each with its own enable switch and threshold, no fleet-wide
+  // master switch. Proximity runs on the demo's simulated position — no live
+  // GPS feed exists yet, so this proves the alert mechanism against the same
+  // animated movement already on the map, not a real driver's real location.
   useEffect(() => {
-    if (!truck.whatsappAlertsEnabled) return;
-    if (!truck.phone || truck.status !== "in_transit" || route.length === 0) return;
-    // Both auto-sampled fuel stops (notify opted-in individually) and
-    // dispatcher-placed alert points (notify on by default) feed the same
-    // proximity check — one mechanism, two ways to end up in the list.
-    const candidates: { id: string; name: string; position: LatLng; notify?: boolean }[] = [
-      ...truck.fuelStops,
-      ...truck.alertPoints,
-    ];
-    for (const stop of candidates) {
-      if (!stop.notify) continue;
-      if (hasAlerted(truck.id, stop.id)) continue;
-      if (haversineKm(position, stop.position) > truck.fuelProximityKm) continue;
+    if (!truck.phone) return;
 
-      markAlerted(truck.id, stop.id);
-      fetch("/api/whatsapp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: truck.phone }),
-      })
-        .then((res) => res.ok)
-        .catch(() => false)
-        .then((ok) => {
+    if (truck.status === "in_transit" && route.length > 0) {
+      const checkProximity = (
+        event: "near_fuel_stop" | "near_parking",
+        candidates: { id: string; name: string; position: LatLng; notify?: boolean }[],
+        radiusKm: number,
+      ) => {
+        for (const stop of candidates) {
+          if (!stop.notify) continue;
+          if (hasAlerted(truck.id, stop.id)) continue;
+          if (haversineKm(position, stop.position) > radiusKm) continue;
+
+          // Marked eagerly so a second tick before this resolves can't fire
+          // a duplicate send — but unmarked again on failure, so a transient
+          // problem (e.g. a template misconfigured on Meta's side) doesn't
+          // permanently block this stop from ever retrying.
+          markAlerted(truck.id, stop.id);
+          sendTruckAlert(event, truck, { stopName: stop.name }).then(({ ok, message }) => {
+            if (!ok) clearAlerted(truck.id, stop.id);
+            onWhatsAppEvent?.(
+              ok ? `📲 ${message}` : `⚠️ WhatsApp send failed for ${truck.driverName} (near ${stop.name})`,
+              ok,
+            );
+          });
+        }
+      };
+
+      // Both auto-sampled fuel stops (notify opted-in individually) and
+      // dispatcher-placed alert points (notify on by default) feed the fuel
+      // check — one mechanism, two ways to end up in the list. Parking only
+      // ever comes from dispatcher-placed points (auto-sampled parkingStops
+      // don't carry a notify flag).
+      if (truck.alertRules.near_fuel_stop.enabled) {
+        checkProximity(
+          "near_fuel_stop",
+          [...truck.fuelStops, ...truck.alertPoints.filter((p) => p.kind === "fuel")],
+          truck.alertRules.near_fuel_stop.threshold,
+        );
+      }
+      if (truck.alertRules.near_parking.enabled) {
+        checkProximity(
+          "near_parking",
+          truck.alertPoints.filter((p) => p.kind === "parking"),
+          truck.alertRules.near_parking.threshold,
+        );
+      }
+    }
+
+    // Fires once a "GPS silent" truck has been silent for at least the
+    // configured minutes. Simulated, same as position above — no real
+    // telemetry backs `statusSince`, just when the status field was last
+    // changed. Keyed on statusSince so a later silent episode (a new
+    // statusSince) can alert again instead of firing exactly once ever.
+    const idleRule = truck.alertRules.gps_silent;
+    if (idleRule.enabled && truck.status === "gps_silent" && truck.statusSince) {
+      const idleMinutes = (Date.now() - truck.statusSince) / 60000;
+      const dedupeKey = `gps_silent:${truck.statusSince}`;
+      if (idleMinutes >= idleRule.threshold && !hasAlerted(truck.id, dedupeKey)) {
+        markAlerted(truck.id, dedupeKey);
+        sendTruckAlert("gps_silent", truck).then(({ ok, message }) => {
+          if (!ok) clearAlerted(truck.id, dedupeKey);
           onWhatsAppEvent?.(
-            ok
-              ? `📲 WhatsApp sent to ${truck.driverName} — approaching ${stop.name}`
-              : `⚠️ WhatsApp send failed for ${truck.driverName} (near ${stop.name})`,
+            ok ? `📲 ${message}` : `⚠️ WhatsApp send failed for ${truck.driverName} (GPS silent)`,
             ok,
           );
         });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elapsed, truck.whatsappAlertsEnabled, truck.fuelProximityKm]);
+  }, [elapsed, truck.alertRules, truck.status, truck.statusSince]);
 
   if (!truck.route) return null;
 
@@ -486,9 +525,9 @@ function FuelStopMarker({ stop, truckId }: { stop: FuelStop; truckId: string }) 
               <input type="checkbox" checked={!!stop.notify} onChange={toggleNotify} />
               <WhatsAppIcon /> Notify driver via WhatsApp here
             </label>
-            {stop.notify && parentTruck && !parentTruck.whatsappAlertsEnabled && (
+            {stop.notify && parentTruck && !parentTruck.alertRules.near_fuel_stop.enabled && (
               <p className="text-[10px] text-ink-muted mt-1">
-                This truck&apos;s WhatsApp alerts are off — turn it on in Fleet Status to actually send.
+                This truck&apos;s fuel-stop alert is off — turn it on in Fleet Status to actually send.
               </p>
             )}
           </div>
@@ -539,11 +578,14 @@ function AlertPointMarker({ point, truckId }: { point: AlertPoint; truckId: stri
               />
               <WhatsAppIcon /> Notify driver via WhatsApp here
             </label>
-            {point.notify && parentTruck && !parentTruck.whatsappAlertsEnabled && (
-              <p className="text-[10px] text-ink-muted mt-1">
-                This truck&apos;s WhatsApp alerts are off — turn it on in Fleet Status to actually send.
-              </p>
-            )}
+            {point.notify &&
+              parentTruck &&
+              !parentTruck.alertRules[point.kind === "fuel" ? "near_fuel_stop" : "near_parking"].enabled && (
+                <p className="text-[10px] text-ink-muted mt-1">
+                  This truck&apos;s {point.kind === "fuel" ? "fuel-stop" : "parking"} alert is off — turn it on in
+                  Fleet Status to actually send.
+                </p>
+              )}
           </div>
 
           <button type="button" onClick={removePoint} className="mt-2 text-[10px] text-brand-red underline block">

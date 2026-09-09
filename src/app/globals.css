@@ -32,6 +32,15 @@ body {
   color: var(--ink);
 }
 
+/* Subtle dot grid over the void black — replaces flat solid panels with a
+   quieter, more premium texture. Faint enough (6% opacity ink dots) not to
+   compete with text or the gold accents sitting on top of it. */
+.dot-grid {
+  background-color: var(--void);
+  background-image: radial-gradient(rgb(242 240 234 / 0.18) 1.25px, transparent 1.25px);
+  background-size: 18px 18px;
+}
+
 /* Visible keyboard focus everywhere, in the brand accent. */
 :focus-visible {
   outline: 2px solid var(--brand-gold);

@@ -1,0 +1,30 @@
+import { DEFAULT_TRUCKS, type TruckEntry } from "@/mock/data";
+
+/**
+ * Server-side mirror of the fleet list, so the WhatsApp webhook (a separate
+ * server-side request, not the browser) can look a driver up by phone
+ * number. The fleet otherwise lives only in the browser's localStorage (see
+ * fleetStore.tsx) — the client pushes its current list here via
+ * /api/fleet/sync on every change, so editing a phone number in Fleet Status
+ * reaches the bot after one sync.
+ *
+ * In-memory only, module-level — resets on server restart and isn't shared
+ * across serverless instances. Fine for a single `npm run dev` demo process;
+ * a real deployment needs an actual store (e.g. a small DB table) since
+ * Vercel's serverless functions don't share memory between invocations.
+ */
+let fleet: TruckEntry[] = DEFAULT_TRUCKS;
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/[^\d]/g, "");
+}
+
+export function setServerFleet(trucks: TruckEntry[]): void {
+  fleet = trucks;
+}
+
+export function getTruckByPhone(phone: string): TruckEntry | undefined {
+  const target = normalizePhone(phone);
+  if (!target) return undefined;
+  return fleet.find((t) => t.phone && normalizePhone(t.phone) === target);
+}

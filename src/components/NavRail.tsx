@@ -102,7 +102,7 @@ function NavIcon({ icon, label, active }: { icon: React.ReactNode; label: string
 
 export default function NavRail({ onCollapse }: { onCollapse?: () => void }) {
   return (
-    <nav className="w-16 shrink-0 border-r border-hairline bg-void flex flex-col items-center gap-1 py-4">
+    <nav className="w-16 shrink-0 dot-grid flex flex-col items-center gap-1 py-4">
       {onCollapse && (
         <button
           type="button"

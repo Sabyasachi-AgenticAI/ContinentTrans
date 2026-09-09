@@ -67,6 +67,38 @@ export type EnrichStatus = "idle" | "loading" | "done" | "error";
 /** Default radius (km) for a truck's WhatsApp fuel-stop proximity alert. */
 export const DEFAULT_FUEL_PROXIMITY_KM = 15;
 
+/** Language the WhatsApp bot replies in for this driver — per-driver, not fleet-wide. */
+export type DriverLanguage = "ro" | "en";
+export const DEFAULT_DRIVER_LANGUAGE: DriverLanguage = "ro";
+
+/**
+ * One independently switchable WhatsApp trigger. Threshold is km for the two
+ * proximity kinds, minutes for gps_silent — each truck turns on only the
+ * rules it needs, at its own threshold, instead of one shared switch/radius
+ * for every trigger type.
+ */
+export type AlertRuleKind = "near_fuel_stop" | "near_parking" | "gps_silent";
+
+export interface AlertRule {
+  enabled: boolean;
+  threshold: number;
+}
+
+export const DEFAULT_ALERT_THRESHOLD: Record<AlertRuleKind, number> = {
+  near_fuel_stop: DEFAULT_FUEL_PROXIMITY_KM,
+  near_parking: DEFAULT_FUEL_PROXIMITY_KM,
+  gps_silent: 30,
+};
+
+/** Fresh object each call — these get spread into per-truck state, never shared by reference. */
+export function defaultAlertRules(): Record<AlertRuleKind, AlertRule> {
+  return {
+    near_fuel_stop: { enabled: false, threshold: DEFAULT_ALERT_THRESHOLD.near_fuel_stop },
+    near_parking: { enabled: false, threshold: DEFAULT_ALERT_THRESHOLD.near_parking },
+    gps_silent: { enabled: false, threshold: DEFAULT_ALERT_THRESHOLD.gps_silent },
+  };
+}
+
 /**
  * One row = one truck, combining what used to be split across separate
  * Driver/Trip records — matches the shape of an uploaded Excel row plus the
@@ -82,14 +114,22 @@ export interface TruckEntry {
   destinationLabel: string;
   notes: string;
   status: TruckStatus;
+  /** Timestamp (Date.now()) of the last time `status` changed — how long a
+   * "GPS silent" truck has actually been silent is measured from this, not
+   * from when the page happened to load. Set automatically by the fleet
+   * store's reducer whenever `status` changes, never patched directly. */
+  statusSince?: number;
   showOnMap: boolean;
-  /** Per-truck, fleet-manager controlled — defaults OFF. No global switch:
-   * each truck's alerting is entirely its own setting, deliberately, after
-   * an early version's single fleet-wide switch turned out to be the wrong
-   * shape for this. */
-  whatsappAlertsEnabled: boolean;
-  /** How close (km) this truck must be to a notify-marked fuel stop before an alert fires. */
-  fuelProximityKm: number;
+  /** Per-truck, fleet-manager controlled — defaults OFF for every rule. No
+   * global switch and no single shared radius: each truck turns on exactly
+   * the triggers it needs (near a fuel stop, near parking, GPS gone quiet),
+   * each at its own threshold, deliberately, after an early version's single
+   * fleet-wide switch+radius turned out to be the wrong shape for this. */
+  alertRules: Record<AlertRuleKind, AlertRule>;
+  /** Language the WhatsApp bot's text replies use for this driver. */
+  language: DriverLanguage;
+  /** Language a future voice agent would use for this driver — set now, independent of `language`, since a driver's read/write language and spoken language aren't always the same. Not consumed anywhere yet. */
+  voiceLanguage: DriverLanguage;
   alert?: TripAlert;
   /** 0-1 starting position along the route, seeds the live-movement simulation. */
   startProgress: number;
@@ -135,8 +175,9 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "in_transit",
     showOnMap: true,
-    whatsappAlertsEnabled: false,
-    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
+    alertRules: defaultAlertRules(),
+    language: DEFAULT_DRIVER_LANGUAGE,
+    voiceLanguage: DEFAULT_DRIVER_LANGUAGE,
     startProgress: 0.12,
     revenueEur: 2248.25,
     fuelStops: [],
@@ -156,8 +197,9 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "in_transit",
     showOnMap: true,
-    whatsappAlertsEnabled: false,
-    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
+    alertRules: defaultAlertRules(),
+    language: DEFAULT_DRIVER_LANGUAGE,
+    voiceLanguage: DEFAULT_DRIVER_LANGUAGE,
     startProgress: 0.35,
     revenueEur: 2345.51,
     fuelStops: [],
@@ -177,8 +219,9 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "gps_silent",
     showOnMap: true,
-    whatsappAlertsEnabled: false,
-    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
+    alertRules: defaultAlertRules(),
+    language: DEFAULT_DRIVER_LANGUAGE,
+    voiceLanguage: DEFAULT_DRIVER_LANGUAGE,
     startProgress: 0.5,
     revenueEur: 4000.0,
     fuelStops: [],
@@ -198,8 +241,9 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "idle",
     showOnMap: true,
-    whatsappAlertsEnabled: false,
-    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
+    alertRules: defaultAlertRules(),
+    language: DEFAULT_DRIVER_LANGUAGE,
+    voiceLanguage: DEFAULT_DRIVER_LANGUAGE,
     startProgress: 0.02,
     revenueEur: 1991.0,
     fuelStops: [],
@@ -219,8 +263,9 @@ export const DEFAULT_TRUCKS: TruckEntry[] = [
     notes: "",
     status: "in_transit",
     showOnMap: true,
-    whatsappAlertsEnabled: false,
-    fuelProximityKm: DEFAULT_FUEL_PROXIMITY_KM,
+    alertRules: defaultAlertRules(),
+    language: DEFAULT_DRIVER_LANGUAGE,
+    voiceLanguage: DEFAULT_DRIVER_LANGUAGE,
     startProgress: 0.68,
     revenueEur: 5724.2,
     fuelStops: [],

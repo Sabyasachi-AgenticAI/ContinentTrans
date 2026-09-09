@@ -47,7 +47,7 @@ export default function Dashboard() {
           type="button"
           onClick={() => setNavOpen(true)}
           aria-label="Expand navigation"
-          className="w-8 shrink-0 border-r border-hairline bg-void flex flex-col items-center gap-3 pt-4 text-ink-muted hover:text-ink hover:bg-surface-raised transition-colors"
+          className="w-8 shrink-0 dot-grid flex flex-col items-center gap-3 pt-4 text-ink-muted hover:text-ink hover:bg-surface-raised transition-colors"
         >
           <ChevronIcon direction="right" className="h-4 w-4" />
           <span className="[writing-mode:vertical-rl] font-display text-[10px] font-medium uppercase tracking-[0.15em]">
@@ -56,7 +56,7 @@ export default function Dashboard() {
         </button>
       )}
 
-      <div className="flex flex-col flex-1 min-h-0 bg-void">
+      <div className="flex flex-col flex-1 min-h-0 dot-grid">
         {/* Branding hierarchy: Continent Trans (the client this dashboard
             serves) stays the visual hero. Flowgentic TRAK (the product) gets
             a small badge, not competing for the same space. Flowgentic AI
@@ -74,7 +74,7 @@ export default function Dashboard() {
             `sm` there just isn't room for both badges beside the logo
             without overlapping it, so they're hidden on phones and the logo
             stands alone. */}
-        <header className="relative flex items-center justify-center bg-void px-6 py-2 sm:py-3 shrink-0">
+        <header className="relative flex items-center justify-center dot-grid px-6 py-2 sm:py-3 shrink-0">
           <div className="hidden sm:flex absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-[#34d399] live-pulse" />
             <span className="font-display text-sm font-medium uppercase tracking-[0.2em] text-ink-muted">
@@ -113,12 +113,12 @@ export default function Dashboard() {
             left rather than the full viewport, so it stays framed on Europe
             instead of stretching into a mostly-empty wide strip. */}
         <div className="flex flex-1 min-h-0">
-          <main className="flex-1 min-h-0">
+          <main className="flex-1 min-h-0 p-2 sm:p-3">
             <FleetMap trucks={trucks} />
           </main>
 
           {statusOpen ? (
-            <aside className="fixed inset-0 z-[2000] sm:static sm:inset-auto sm:z-auto sm:w-96 shrink-0 border-l border-hairline bg-void overflow-y-auto flex flex-col">
+            <aside className="fixed inset-0 z-[2000] sm:static sm:inset-auto sm:z-auto sm:w-96 shrink-0 dot-grid overflow-y-auto flex flex-col">
               <div className="flex items-center gap-2 px-4 pt-4 pb-1 shrink-0">
                 <span className="h-3.5 w-0.5 bg-gradient-to-b from-brand-red to-brand-gold rounded-full" />
                 <h2 className="font-display text-sm font-semibold uppercase tracking-[0.15em] text-ink flex-1">
@@ -140,7 +140,7 @@ export default function Dashboard() {
               type="button"
               onClick={() => setStatusOpen(true)}
               aria-label="Expand fleet status"
-              className="w-8 shrink-0 border-l border-hairline bg-void flex flex-col items-center gap-3 pt-4 text-ink-muted hover:text-ink hover:bg-surface-raised transition-colors"
+              className="w-8 shrink-0 dot-grid flex flex-col items-center gap-3 pt-4 text-ink-muted hover:text-ink hover:bg-surface-raised transition-colors"
             >
               <ChevronIcon direction="left" className="h-4 w-4" />
               <span className="[writing-mode:vertical-rl] font-display text-[10px] font-medium uppercase tracking-[0.15em]">
@@ -153,7 +153,7 @@ export default function Dashboard() {
         {/* A flat black bar here just disappeared into the header/aside's own
             black — a gold hairline reads as a deliberate credit strip instead
             of a leftover dark stripe. */}
-        <footer className="shrink-0 flex items-center justify-center gap-1.5 border-t border-brand-gold/40 bg-void px-4 py-2">
+        <footer className="shrink-0 flex items-center justify-center gap-1.5 border-t border-brand-gold/40 dot-grid px-4 py-2">
           <span className="font-display text-[11px] tracking-[0.05em] text-ink-muted">Powered by</span>
           <span className="font-display text-[11px] font-semibold tracking-[0.05em] text-ink">
             FlowgenticAI <span className="text-brand-gold">GmbH</span>
