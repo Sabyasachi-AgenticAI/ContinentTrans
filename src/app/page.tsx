@@ -33,13 +33,28 @@ export default function Dashboard() {
   // (NaN, NaN)") instead of just looking cramped. Checked after mount, not
   // in the initializer, since `window` doesn't exist during SSR.
   const [statusOpen, setStatusOpen] = useState(true);
+  const [navOpen, setNavOpen] = useState(true);
   useEffect(() => {
     if (window.innerWidth < 768) setStatusOpen(false);
   }, []);
 
   return (
     <div className="flex flex-1 min-h-0">
-      <NavRail />
+      {navOpen ? (
+        <NavRail onCollapse={() => setNavOpen(false)} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setNavOpen(true)}
+          aria-label="Expand navigation"
+          className="w-8 shrink-0 border-r border-hairline bg-void flex flex-col items-center gap-3 pt-4 text-ink-muted hover:text-ink hover:bg-surface-raised transition-colors"
+        >
+          <ChevronIcon direction="right" className="h-4 w-4" />
+          <span className="[writing-mode:vertical-rl] font-display text-[10px] font-medium uppercase tracking-[0.15em]">
+            Menu
+          </span>
+        </button>
+      )}
 
       <div className="flex flex-col flex-1 min-h-0 bg-void">
         {/* Branding hierarchy: Continent Trans (the client this dashboard
@@ -70,13 +85,19 @@ export default function Dashboard() {
           {/* Real logo file, wide crop — 1024x256, matching the wordmark's
               actual proportions instead of the old 400x400 square (which had
               dead black margins above/below the text, forcing a lossy
-              zoom-crop to fill the header). */}
+              zoom-crop to fill the header). The JPG's own black backing
+              doesn't exactly match --void (JPEG compression + a slightly
+              different black), so it read as a dark box floating on the
+              header. `mix-blend-screen` makes true-black pixels transparent
+              down to the header's own bg-void, leaving only the red/gold
+              wordmark visible — no visible seam regardless of the file's
+              exact black point. */}
           <Image
             src="/continent-trans-logo-wide.jpg"
             alt="Continent Trans"
             width={1024}
             height={256}
-            className="h-14 sm:h-16 md:h-20 w-auto object-contain"
+            className="h-14 sm:h-16 md:h-20 w-auto object-contain mix-blend-screen"
             priority
           />
 

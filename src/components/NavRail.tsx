@@ -55,6 +55,22 @@ function UserIcon({ className }: { className?: string }) {
   );
 }
 
+function ChevronIcon({ direction, className }: { direction: "left" | "right"; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d={direction === "left" ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"} />
+    </svg>
+  );
+}
+
 function NavIcon({ icon, label, active }: { icon: React.ReactNode; label: string; active?: boolean }) {
   return (
     <div className="group relative">
@@ -84,9 +100,19 @@ function NavIcon({ icon, label, active }: { icon: React.ReactNode; label: string
   );
 }
 
-export default function NavRail() {
+export default function NavRail({ onCollapse }: { onCollapse?: () => void }) {
   return (
     <nav className="w-16 shrink-0 border-r border-hairline bg-void flex flex-col items-center gap-1 py-4">
+      {onCollapse && (
+        <button
+          type="button"
+          onClick={onCollapse}
+          aria-label="Collapse navigation"
+          className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-raised hover:text-ink transition-colors"
+        >
+          <ChevronIcon direction="left" className="h-4 w-4" />
+        </button>
+      )}
       <NavIcon icon={<MapIcon className="h-5 w-5" />} label="Map" active />
       <NavIcon icon={<LoadsIcon className="h-5 w-5" />} label="Loads" />
       <NavIcon icon={<TruckIcon className="h-5 w-5" />} label="Vehicles" />
