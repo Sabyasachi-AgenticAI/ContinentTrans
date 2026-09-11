@@ -1,7 +1,11 @@
 import { LiveKitAPI, RoomAgentDispatch } from "livekit-server-sdk";
 import type { TruckEntry } from "@/mock/data";
 
-const WHATSAPP_CLOUD_API_VERSION = "21.0";
+// LiveKit's WhatsApp Connector only accepts v23.0-v26.0 — the Graph API
+// version used elsewhere in this app (v21.0, for plain message sends) isn't
+// one of them and gets rejected with "whatsapp cloud api version not
+// supported".
+const WHATSAPP_CLOUD_API_VERSION = "24.0";
 
 /**
  * Places a real outbound WhatsApp call via LiveKit's WhatsApp Connector
