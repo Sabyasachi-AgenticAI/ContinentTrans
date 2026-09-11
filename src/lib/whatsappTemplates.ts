@@ -15,7 +15,7 @@ import type { TruckEntry } from "@/mock/data";
  * swapping `metaTemplateName` to the approved name is the only change needed
  * at that point, everywhere this registry is used.
  */
-export type WhatsAppEvent = "near_fuel_stop" | "near_parking" | "gps_silent" | "sos";
+export type WhatsAppEvent = "near_fuel_stop" | "near_parking" | "gps_silent" | "route_deviation" | "sos";
 
 export interface WhatsAppEventContext {
   /** Name of the fuel stop / alert point the driver is approaching — only set for "near_fuel_stop". */
@@ -36,6 +36,14 @@ interface WhatsAppTemplate {
    * see route.ts, which only forwards these once the name is a real template.
    */
   buildParams: (truck: TruckEntry, ctx: WhatsAppEventContext) => string[];
+  /**
+   * Marks the events serious enough to escalate to a voice call (LiveKit's
+   * WhatsApp Calling connector, once that's set up) rather than staying a
+   * text-only nudge — gps_silent and route_deviation per the actual
+   * requirement; near_fuel_stop/near_parking are routine and stay text.
+   * Not wired to anything yet; this just records the intended routing.
+   */
+  callWorthy: boolean;
 }
 
 export const WHATSAPP_TEMPLATES: Record<WhatsAppEvent, WhatsAppTemplate> = {
@@ -56,6 +64,7 @@ export const WHATSAPP_TEMPLATES: Record<WhatsAppEvent, WhatsAppTemplate> = {
       truck.sourceLabel,
       truck.destinationLabel,
     ],
+    callWorthy: false,
   },
   near_parking: {
     // Approved — real text now goes out, not the hello_world sample.
@@ -75,6 +84,7 @@ export const WHATSAPP_TEMPLATES: Record<WhatsAppEvent, WhatsAppTemplate> = {
       truck.sourceLabel,
       truck.destinationLabel,
     ],
+    callWorthy: false,
   },
   gps_silent: {
     // gps_idle_alert exists but is still "In review" in WhatsApp Manager —
@@ -88,6 +98,19 @@ export const WHATSAPP_TEMPLATES: Record<WhatsAppEvent, WhatsAppTemplate> = {
         ? `${truck.driverName}, truck ${truck.truckPlate}'s GPS has gone quiet. Please confirm you're OK.`
         : `${truck.driverName}, GPS-ul camionului ${truck.truckPlate} nu a mai transmis poziția. Te rugăm confirmă că ești bine.`,
     buildParams: (truck) => [truck.driverName, truck.truckPlate],
+    callWorthy: true,
+  },
+  route_deviation: {
+    // No template submitted yet — same hello_world placeholder pattern as
+    // gps_silent above until one's approved.
+    metaTemplateName: "hello_world",
+    metaLanguageCode: "en_US",
+    buildMessage: (truck) =>
+      truck.language === "en"
+        ? `${truck.driverName}, truck ${truck.truckPlate} appears to have left the planned route (${truck.sourceLabel} → ${truck.destinationLabel}). Please confirm your status.`
+        : `${truck.driverName}, camionul ${truck.truckPlate} pare să fi deviat de la ruta planificată (${truck.sourceLabel} → ${truck.destinationLabel}). Te rugăm confirmă starea ta.`,
+    buildParams: (truck) => [truck.driverName, truck.truckPlate, truck.sourceLabel, truck.destinationLabel],
+    callWorthy: true,
   },
   sos: {
     metaTemplateName: "hello_world",
@@ -97,6 +120,7 @@ export const WHATSAPP_TEMPLATES: Record<WhatsAppEvent, WhatsAppTemplate> = {
         ? `URGENT: ${truck.driverName}, an SOS alert was triggered for truck ${truck.truckPlate}. Dispatch is contacting you now.`
         : `URGENT: ${truck.driverName}, a fost declanșată o alertă SOS pentru camionul ${truck.truckPlate}. Dispecerul te contactează imediat.`,
     buildParams: (truck) => [truck.driverName, truck.truckPlate],
+    callWorthy: true,
   },
 };
 

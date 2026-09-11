@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Marker, Polyline, Popup, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import type { TruckEntry, FuelStop, AlertPoint, LatLng } from "@/mock/data";
-import { interpolateAlongRoute, haversineKm } from "@/lib/geo";
+import { interpolateAlongRoute, haversineKm, distanceFromRouteKm } from "@/lib/geo";
 import { fetchTruckRoute, type RouteSource } from "@/lib/routing";
 import { fetchNearbyFuelPrices, type FuelPriceStation } from "@/lib/fuelPrices";
 import { useFleet } from "@/lib/fleetStore";
@@ -150,6 +150,11 @@ export default function TripLayer({
   // volume reasoning as geocoding.
   const [roadRoute, setRoadRoute] = useState<LatLng[] | null>(null);
   const [routeSource, setRouteSource] = useState<RouteSource>("mock");
+  // Edge-detects "just went off route" vs "still off route" — component-local
+  // rather than logged via hasAlerted/markAlerted, so a truck can alert again
+  // on a later, separate deviation episode without needing a stored
+  // timestamp the way gps_silent's statusSince provides.
+  const wasOffRouteRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +238,29 @@ export default function TripLayer({
           truck.alertRules.near_parking.threshold,
         );
       }
+
+      // Fires on the rising edge (just went off route), not on every tick
+      // while still off route — resets once back within threshold so a
+      // later, separate deviation can alert again. NOTE: the demo's
+      // simulated position is computed BY interpolating along this same
+      // `route`, so it always sits exactly on it — this can't actually fire
+      // until there's a real (or deliberately simulated) position that can
+      // diverge from the planned route.
+      const deviationRule = truck.alertRules.route_deviation;
+      if (deviationRule.enabled) {
+        const isOffRoute = distanceFromRouteKm(position, route) > deviationRule.threshold;
+        if (isOffRoute && !wasOffRouteRef.current) {
+          wasOffRouteRef.current = true;
+          sendTruckAlert("route_deviation", truck).then(({ ok, message }) => {
+            onWhatsAppEvent?.(
+              ok ? `📲 ${message}` : `⚠️ WhatsApp send failed for ${truck.driverName} (route deviation)`,
+              ok,
+            );
+          });
+        } else if (!isOffRoute) {
+          wasOffRouteRef.current = false;
+        }
+      }
     }
 
     // Fires once a "GPS silent" truck has been silent for at least the
@@ -246,13 +274,28 @@ export default function TripLayer({
       const dedupeKey = `gps_silent:${truck.statusSince}`;
       if (idleMinutes >= idleRule.threshold && !hasAlerted(truck.id, dedupeKey)) {
         markAlerted(truck.id, dedupeKey);
-        sendTruckAlert("gps_silent", truck).then(({ ok, message }) => {
-          if (!ok) clearAlerted(truck.id, dedupeKey);
-          onWhatsAppEvent?.(
-            ok ? `📲 ${message}` : `⚠️ WhatsApp send failed for ${truck.driverName} (GPS silent)`,
-            ok,
-          );
-        });
+        // Demo-scoped: gps_silent places a real AI voice call over WhatsApp
+        // (see /voice-agent) instead of a text nudge — the other rules stay
+        // text-only for now.
+        fetch("/api/whatsapp/call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ truck, idleMinutes }),
+        })
+          .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+          .then(({ ok, body }) => {
+            if (!ok) clearAlerted(truck.id, dedupeKey);
+            onWhatsAppEvent?.(
+              ok
+                ? `📞 Calling ${truck.driverName} (GPS idle ${Math.round(idleMinutes)} min)`
+                : `⚠️ Call failed for ${truck.driverName} (GPS silent): ${body?.error ?? "unknown error"}`,
+              ok,
+            );
+          })
+          .catch(() => {
+            clearAlerted(truck.id, dedupeKey);
+            onWhatsAppEvent?.(`⚠️ Call failed for ${truck.driverName} (GPS silent)`, false);
+          });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

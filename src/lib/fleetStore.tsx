@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from "react";
 import { DEFAULT_TRUCKS, DEFAULT_DRIVER_LANGUAGE, defaultAlertRules, type TruckEntry } from "@/mock/data";
 
 // Bumped to v2 when seed trucks stopped shipping pre-located — anyone with
@@ -104,18 +104,20 @@ export function FleetProvider({ children }: { children: ReactNode }) {
           alertPoints: t.alertPoints ?? [],
           language: t.language ?? DEFAULT_DRIVER_LANGUAGE,
           voiceLanguage: t.voiceLanguage ?? DEFAULT_DRIVER_LANGUAGE,
-          alertRules:
-            t.alertRules ??
-            (() => {
-              const rules = defaultAlertRules();
-              if (t.whatsappAlertsEnabled !== undefined) {
-                rules.near_fuel_stop = {
-                  enabled: t.whatsappAlertsEnabled,
-                  threshold: t.fuelProximityKm ?? rules.near_fuel_stop.threshold,
-                };
-              }
-              return rules;
-            })(),
+          // Merged over a fresh defaultAlertRules() rather than used as-is —
+          // a truck saved under an *earlier* alertRules shape (e.g. before
+          // route_deviation existed) has the object but not that key, which
+          // would crash any code reading truck.alertRules.route_deviation.
+          alertRules: (() => {
+            const rules = defaultAlertRules();
+            if (t.whatsappAlertsEnabled !== undefined) {
+              rules.near_fuel_stop = {
+                enabled: t.whatsappAlertsEnabled,
+                threshold: t.fuelProximityKm ?? rules.near_fuel_stop.threshold,
+              };
+            }
+            return { ...rules, ...t.alertRules };
+          })(),
         }));
         dispatch({ type: "SET_ALL", trucks: migrated });
       }
@@ -142,6 +144,35 @@ export function FleetProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify(trucks),
     }).catch(() => {});
   }, [trucks]);
+
+  // Picks up server-side changes — currently just the voice agent appending
+  // a call outcome to a truck's Notes after a GPS-idle call (see
+  // /api/fleet/call-outcome). The agent is its own process reaching the
+  // dashboard only over HTTP, so a short poll is the only way this side
+  // notices; a ref (not `trucks` in the closure) keeps each tick comparing
+  // against the latest state instead of whatever it was when this effect
+  // first ran.
+  const trucksRef = useRef(trucks);
+  useEffect(() => {
+    trucksRef.current = trucks;
+  }, [trucks]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch("/api/fleet/state")
+        .then((res) => res.json())
+        .then((data: { trucks?: TruckEntry[] }) => {
+          for (const serverTruck of data.trucks ?? []) {
+            const localTruck = trucksRef.current.find((t) => t.id === serverTruck.id);
+            if (localTruck && serverTruck.notes !== localTruck.notes) {
+              dispatch({ type: "UPDATE", id: serverTruck.id, patch: { notes: serverTruck.notes } });
+            }
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const value: FleetContextValue = {
     trucks,

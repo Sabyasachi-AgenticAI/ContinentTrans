@@ -14,6 +14,7 @@ const RULE_OPTIONS: { key: AlertRuleKind; label: string; unit: string }[] = [
   { key: "near_fuel_stop", label: "Near fuel stop", unit: "km" },
   { key: "near_parking", label: "Near parking", unit: "km" },
   { key: "gps_silent", label: "GPS idle", unit: "min" },
+  { key: "route_deviation", label: "Route deviation", unit: "km" },
 ];
 
 const LANGUAGE_OPTIONS: DriverLanguage[] = ["ro", "en"];

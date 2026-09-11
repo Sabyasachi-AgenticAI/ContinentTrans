@@ -28,3 +28,26 @@ export function getTruckByPhone(phone: string): TruckEntry | undefined {
   if (!target) return undefined;
   return fleet.find((t) => t.phone && normalizePhone(t.phone) === target);
 }
+
+export function getServerFleet(): TruckEntry[] {
+  return fleet;
+}
+
+/**
+ * Appends a call outcome (e.g. the reason a driver gave the GPS-idle voice
+ * agent) to that truck's Notes field, timestamped. The browser picks this up
+ * via a short poll (see fleetStore.tsx) since this mirror is the only place
+ * a server-side process — the agent, calling in over HTTP — can reach; it
+ * has no way to touch the browser's own state directly.
+ */
+export function appendTruckNote(phone: string, note: string): TruckEntry | undefined {
+  const target = normalizePhone(phone);
+  if (!target) return undefined;
+  const truck = fleet.find((t) => t.phone && normalizePhone(t.phone) === target);
+  if (!truck) return undefined;
+
+  const stamp = new Date().toLocaleString("ro-RO", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  const line = `[${stamp}] ${note}`;
+  truck.notes = truck.notes ? `${truck.notes}\n${line}` : line;
+  return truck;
+}

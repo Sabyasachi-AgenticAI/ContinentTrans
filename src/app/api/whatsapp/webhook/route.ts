@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { LiveKitAPI, SessionDescription } from "livekit-server-sdk";
 import { getTruckByPhone } from "@/lib/fleetServer";
 import { buildStatusReply, buildUnknownDriverReply } from "@/lib/whatsappReply";
 import { sendWhatsAppText } from "@/lib/metaWhatsApp";
@@ -45,6 +46,32 @@ interface InboundMessage {
   type: string;
 }
 
+interface InboundCall {
+  id: string;
+  event: string;
+  session?: { sdp_type?: string; sdp?: string };
+}
+
+/**
+ * Completes the WebRTC handshake for a business-initiated WhatsApp call
+ * (see liveKitCall.ts, which starts it via dialWhatsAppCall). Meta sends
+ * this "connect" event with its SDP answer once the driver picks up;
+ * connectWhatsAppCall must be called promptly — LiveKit's docs warn that a
+ * delay here causes silence and disconnection.
+ */
+async function handleCallEvent(call: InboundCall) {
+  if (call.event !== "connect" || !call.session?.sdp) return;
+
+  const api = new LiveKitAPI();
+  const sdp = new SessionDescription({ type: call.session.sdp_type ?? "answer", sdp: call.session.sdp });
+  try {
+    await api.connector.connectWhatsAppCall(call.id, sdp);
+    console.log(`[WhatsApp call] connected callId=${call.id}`);
+  } catch (err) {
+    console.error(`[WhatsApp call] connectWhatsAppCall failed for callId=${call.id}:`, err);
+  }
+}
+
 export async function POST(request: Request) {
   const rawBody = await request.text();
 
@@ -53,8 +80,14 @@ export async function POST(request: Request) {
   }
 
   const payload = JSON.parse(rawBody);
-  const message: InboundMessage | undefined =
-    payload?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  const value = payload?.entry?.[0]?.changes?.[0]?.value;
+  const message: InboundMessage | undefined = value?.messages?.[0];
+  const call: InboundCall | undefined = value?.calls?.[0];
+
+  if (call) {
+    await handleCallEvent(call);
+    return NextResponse.json({ ok: true });
+  }
 
   // Delivery/read status callbacks land on this same webhook — nothing to
   // reply to, just acknowledge so Meta doesn't retry.

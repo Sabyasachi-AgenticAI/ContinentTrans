@@ -72,12 +72,15 @@ export type DriverLanguage = "ro" | "en";
 export const DEFAULT_DRIVER_LANGUAGE: DriverLanguage = "ro";
 
 /**
- * One independently switchable WhatsApp trigger. Threshold is km for the two
- * proximity kinds, minutes for gps_silent — each truck turns on only the
- * rules it needs, at its own threshold, instead of one shared switch/radius
- * for every trigger type.
+ * One independently switchable WhatsApp trigger. Threshold is km for the
+ * three proximity/distance kinds, minutes for gps_silent — each truck turns
+ * on only the rules it needs, at its own threshold, instead of one shared
+ * switch/radius for every trigger type. gps_silent and route_deviation are
+ * also the two triggers meant to escalate to a voice call (see
+ * src/lib/whatsappTemplates.ts), not just a WhatsApp text — near_fuel_stop
+ * and near_parking stay text-only nudges.
  */
-export type AlertRuleKind = "near_fuel_stop" | "near_parking" | "gps_silent";
+export type AlertRuleKind = "near_fuel_stop" | "near_parking" | "gps_silent" | "route_deviation";
 
 export interface AlertRule {
   enabled: boolean;
@@ -88,6 +91,7 @@ export const DEFAULT_ALERT_THRESHOLD: Record<AlertRuleKind, number> = {
   near_fuel_stop: DEFAULT_FUEL_PROXIMITY_KM,
   near_parking: DEFAULT_FUEL_PROXIMITY_KM,
   gps_silent: 30,
+  route_deviation: 10,
 };
 
 /** Fresh object each call — these get spread into per-truck state, never shared by reference. */
@@ -96,6 +100,7 @@ export function defaultAlertRules(): Record<AlertRuleKind, AlertRule> {
     near_fuel_stop: { enabled: false, threshold: DEFAULT_ALERT_THRESHOLD.near_fuel_stop },
     near_parking: { enabled: false, threshold: DEFAULT_ALERT_THRESHOLD.near_parking },
     gps_silent: { enabled: false, threshold: DEFAULT_ALERT_THRESHOLD.gps_silent },
+    route_deviation: { enabled: false, threshold: DEFAULT_ALERT_THRESHOLD.route_deviation },
   };
 }
 

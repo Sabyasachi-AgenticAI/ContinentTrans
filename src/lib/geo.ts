@@ -58,6 +58,40 @@ export function routeDistanceKm(route: LatLng[]): number {
   return total;
 }
 
+/**
+ * Shortest distance (km) from a position to the nearest point on any segment
+ * of a route polyline — how far "off route" a truck currently is. Segments
+ * are projected onto a local planar approximation (longitude scaled by
+ * cos(latitude)) rather than true geodesic math, consistent with the
+ * haversine-everywhere approach already used in this file — accurate enough
+ * for a deviation threshold measured in km, not for surveying.
+ */
+export function distanceFromRouteKm(position: LatLng, route: LatLng[]): number {
+  if (route.length === 0) return Infinity;
+  if (route.length === 1) return haversineKm(position, route[0]);
+
+  const latRad = (position[0] * Math.PI) / 180;
+  const kmPerDegLat = 111.32;
+  const kmPerDegLng = 111.32 * Math.cos(latRad);
+  const toXY = (p: LatLng): [number, number] => [p[1] * kmPerDegLng, p[0] * kmPerDegLat];
+  const [px, py] = toXY(position);
+
+  let min = Infinity;
+  for (let i = 0; i < route.length - 1; i++) {
+    const [ax, ay] = toXY(route[i]);
+    const [bx, by] = toXY(route[i + 1]);
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+    const cx = ax + t * dx;
+    const cy = ay + t * dy;
+    const dist = Math.hypot(px - cx, py - cy);
+    if (dist < min) min = dist;
+  }
+  return min;
+}
+
 function bearingBetween(a: LatLng, b: LatLng): number {
   const lat1 = (a[0] * Math.PI) / 180;
   const lat2 = (b[0] * Math.PI) / 180;
